@@ -1,38 +1,41 @@
 # Team setup
 
-This is the shared foundation for George, Katie, and Nick. The scaffold is implemented; live account connections require the steps below. Use **one shared development project per service**, with each teammate using their own login. Keep real production data and payments separate when you launch.
+This is the shared foundation for George (`George-Anagnostou`), Kathryn (`kathryn-salad-studio`), and Nick (`ncentis`) building Glass Box. The scaffold is implemented; live account connections require the steps below. Use **one shared development project per service**, with each teammate using their own login. Keep real production data and payments separate when you launch.
 
 ## 1. Accounts and access
 
 Existing subscriptions do not automatically grant API usage, project access, or team seats. Confirm each service's current plan permits the collaboration you need.
 
-| Service        | Owner setup                                                               | Invite teammates / verify                                                                                                                       |
-| -------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub         | Put this repository under the intended owner/organization                 | Give Katie and Nick write access. Enable PR checks; protect `main` when supported.                                                              |
-| Supabase       | Create/select a development project and record its region and project ref | Invite both teammates to the organization/project with development access. Confirm they can open Auth, SQL, and logs.                           |
-| Stripe         | Select a shared sandbox or test-mode account                              | Invite each teammate with a developer-appropriate role and sandbox access. Confirm who can create products and webhook destinations.            |
-| Vercel         | Import this GitHub repository into the intended team                      | Invite both teammates with project/deployment access; connect their GitHub identities. Check team-seat/deploy-author requirements on your plan. |
-| OpenAI         | Create/select an API project, enable billing, choose usage limits         | Invite teammates to the project and create individual development keys. ChatGPT subscriptions do **not** include OpenAI API credit.             |
-| Secret manager | Create a shared development vault                                         | Share project configuration through 1Password, Bitwarden, or your existing vault. Keep personal keys personal.                                  |
+| Service        | Owner setup                                                                           | Invite teammates / verify                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub         | Canonical repository is `George-Anagnostou/pure_vibes`; default is `master`           | Grant Kathryn and Nick Write access; have them accept their invitations. `master` requires PRs, one approval, and `app`/`database` checks; force-push and deletion are disabled. |
+| Supabase       | Use the shared development project named `pure_vibes`; verify its org and project ref | Invite Kathryn and Nick to the organization/project with development access. Confirm they can open Auth, SQL, and logs.                                                          |
+| Stripe         | Select a shared sandbox or test-mode account                                          | Invite each teammate with a developer-appropriate role and sandbox access. Confirm who can create products and webhook destinations.                                             |
+| Vercel         | Import this GitHub repository into the intended team                                  | Invite both teammates with project/deployment access; connect their GitHub identities. Check team-seat/deploy-author requirements on your plan.                                  |
+| OpenAI         | Create/select an API project, enable billing, choose usage limits                     | Invite teammates to the project and create individual development keys. ChatGPT subscriptions do **not** include OpenAI API credit.                                              |
+| Secret manager | Create a shared development vault                                                     | Share project configuration through 1Password, Bitwarden, or your existing vault. Keep personal keys personal.                                                                   |
 
-Suggested ownership: one teammate owns schema/auth, one billing/deployment, one AI/product UI. Everyone reviews integration changes. Assign the names yourselves.
+File ownership and approvals are defined in the **Team ownership and product contract** section of `AGENTS.md`. GitHub Issues are available for coordination; check related open issues and PRs before starting overlapping work.
 
 ## 2. Configure Supabase
 
 ### Recommended for the hackathon: shared hosted development project
 
-One teammate runs:
+Only Nick creates migrations and applies them to the shared hosted development database. Other teammates propose schema changes to Nick and can test migrations locally after coordinating with him:
 
 ```bash
 npm ci
 npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase projects list
+npx supabase link --project-ref PURE_VIBES_PROJECT_REF
+npx supabase migration list --linked
+# Nick only, after explicit approval for the shared database change:
 npx supabase db push --dry-run
 npm run db:push
 npm run db:types -- --linked
 ```
 
-Confirm the CLI is linked to the intended **development** project before pushing. Commit migrations and regenerated `src/types/database.ts`. Each teammate links independently; CLI login/link state is local and ignored. CLI authentication is separate from app keys.
+Confirm the organization, dashboard, and project ref before linking; a project name alone is not enough. `supabase link` configures only this checkout and does not connect GitHub or deploy migrations. Confirm the linked target again before any push. Commit migrations and regenerated `src/types/database.ts` together. Each teammate links independently; CLI login/link state is local and ignored. CLI authentication is separate from app keys. Never edit a migration already pushed to the shared project; add a new migration.
 
 In Supabase **Project Settings → API / API Keys** (or the Connect dialog), copy:
 
@@ -113,8 +116,13 @@ The sample performs two sequential model calls. It has token caps, a 45-second A
 Prerequisites: Git, Node 24 LTS, npm. Docker is needed only for local Supabase/testing; Stripe CLI is needed for local payment webhooks.
 
 ```bash
-git clone YOUR_REPOSITORY_URL
+gh repo clone George-Anagnostou/pure_vibes
 cd pure_vibes
+git fetch origin --prune
+OWNER=george # choose nick, george, or kathryn
+TASK=my-task
+git worktree add "../pure_vibes-$OWNER-$TASK" -b "$OWNER/$TASK" origin/master
+cd "../pure_vibes-$OWNER-$TASK"
 nvm install
 nvm use
 npm ci
@@ -144,14 +152,17 @@ Open `http://localhost:3000`. If you run a different port, update `APP_URL` and 
 
 For a real launch, create separate production resources/keys, set Production env values, add a production webhook, choose the live recurring price, and configure Auth/SMTP for that domain. Never use real card details in test mode.
 
-## 7. Team workflow
+## 7. Team workflow and hackathon cadence
 
-- Branch per task, open a PR, and merge after `app` and `database` CI checks pass.
+- Use a dedicated worktree and owner-prefixed branch per task (`nick/...`, `george/...`, `kathryn/...`); keep the shared base checkout clean. Fetch `origin` and check related issues/PRs before starting. Never push directly to `master`.
+- Open focused PRs frequently. Cross-owner changes must disclose touched files and receive the affected owner's approval. `master` requires one independent approval plus the `app` and `database` checks; stale approvals are dismissed and force-push/deletion are disabled.
+- Before updating a PR, fetch and rebase your clean task branch on current `origin/master`, then rerun checks. Resolve conflicts only in your own files; stop and ask the owner when conflicts touch their files. Coordinate before rewriting a branch another contributor uses.
 - Keep `package-lock.json` committed; teammates and CI use `npm ci`.
-- Add schema changes with `npx supabase migration new descriptive_name`. Test locally, regenerate types, commit both. Coordinate hosted migration pushes through one owner.
+- Only Nick creates migrations and pushes to shared Supabase. Test locally, regenerate types, and commit migration/types together. Obtain explicit approval before shared DB changes.
 - Do not make untracked schema edits in the shared SQL editor. If necessary, immediately capture them as a migration.
 - Vercel Git integration deploys application code; it does **not** apply Supabase migrations. Apply backward-compatible migrations before deploying code that needs them.
 - Service invitations are developer access. Signing into this app creates a separate customer/user account; this starter does not yet implement shared customer workspaces.
+- On hackathon day (date to confirm), target a ~5:00pm PT finish: 4:00pm PT feature freeze (only demo-blocking fixes afterward), and 4:30pm PT freeze on `master` (nothing merges after).
 
 ## End-to-end acceptance checklist
 
@@ -169,11 +180,10 @@ For a real launch, create separate production resources/keys, set Production env
 
 No secret values need to be sent in chat. Decide/share:
 
-1. GitHub owner/repository and Katie/Nick's invitation identities.
-2. Intended Supabase project ref, Vercel team/project, and Stripe sandbox/account.
-3. Preferred AI provider and whether API billing is enabled.
-4. Stable development URL (a Vercel domain is sufficient).
-5. Recurring plan amount/currency/interval and desired portal behavior.
-6. Individual accounts vs shared customer workspaces for the eventual product.
+1. Intended Supabase project ref, Vercel team/project, and Stripe sandbox/account.
+2. Preferred AI provider and whether API billing is enabled.
+3. Stable development URL (a Vercel domain is sufficient).
+4. Recurring plan amount/currency/interval and desired portal behavior.
+5. Individual accounts vs shared customer workspaces for the eventual product.
 
 Enter credentials in your local env file, Vercel, and shared vault. Those steps activate the scaffold without committing secrets.

@@ -1,5 +1,11 @@
 # Architecture
 
+## Glass Box team boundaries
+
+This scaffold is maintained in the canonical repository, `George-Anagnostou/pure_vibes`. Read `AGENTS.md` before editing. Nick owns Glass Box prompts/checkpoints/contracts, review and MCP API routes, scripts, fixtures, and Supabase migrations. Kathryn owns approval/dashboard/profile UI, shared components, global CSS, and public assets. George owns authentication, Stripe, CI, deployment configuration, `package.json`, and internal documentation. `src/lib/glassbox/types.ts` is Nick-owned shared UI/API contract; ask him before changing it. After 3:00pm PT on hackathon day, contract changes must be additive. Cross-owner PRs must disclose touched areas and obtain the affected owner's approval before merge.
+
+Only Nick creates migrations and applies them to the shared Supabase project. Never edit an already-pushed migration; create a new one. Get explicit approval before shared or destructive database actions. Vercel deployment does not apply Supabase migrations.
+
 ## Integration map
 
 ```text
