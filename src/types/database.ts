@@ -51,7 +51,7 @@ export type Database = {
     Views: { [_ in never]: never };
     Functions: {
       approve_review: {
-        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null; p_added_by_human?: Json; p_removed_by_human?: Json; p_decisions?: Json };
+        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null; p_added_by_human?: Json; p_removed_by_human?: Json; p_decisions?: Json; p_challenges?: Json };
         Returns: string;
       };
       save_profile: { Args: { p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number }; Returns: undefined };
