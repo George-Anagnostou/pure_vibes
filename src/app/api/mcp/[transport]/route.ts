@@ -80,7 +80,7 @@ const ALIGN_DESCRIPTION =
 // context, so agents added with a plain `claude mcp add` (no CLAUDE.md from the
 // agent kit) still know when to check in with the human.
 const SERVER_INSTRUCTIONS =
-  "Glass Box lets the human check how you're approaching a task before you act. Before acting on any task with real choices (scope, data sources, cost, time, quality, risk), call `align` with what you think the task is, your approach, your force-ranked priorities and the decisions you'd otherwise make silently. Answer every challenge it returns with `answer_challenges`. Then show the human the align_url in one line and call `get_contract` until it is approved; don't start the work before that. The approved contract is binding: follow ranked_priorities, decisions and instructions_from_human, and tell the human in one or two lines what changed. Call `checkpoint` before spending, deleting, contacting anyone or accessing anything new, and never perform an action it blocks. If a new significant decision comes up, call `align` again. Skip Glass Box only for trivial requests with no real choices.";
+  "Glass Box lets the human check how you're approaching a task before you act. Before acting on any task with real choices (scope, data sources, cost, time, quality, risk), including writing code or scripts that will reach external services, people or their data, call `align` with what you think the task is, your approach, your force-ranked priorities and the decisions you'd otherwise make silently. Answer every challenge it returns with `answer_challenges`. Then show the human the align_url in one line and call `get_contract` until it is approved; don't start the work before that. The approved contract is binding: follow ranked_priorities, decisions and instructions_from_human, and tell the human in one or two lines what changed. Call `checkpoint` before spending, deleting, contacting anyone or accessing anything new, and never perform an action it blocks. If a new significant decision comes up, call `align` again. Skip Glass Box only for trivial requests with no real choices: if you would end by telling the human which choices you made for them, align on those choices first instead.";
 
 const handler = createMcpHandler(
   (server) => {
@@ -295,7 +295,7 @@ const handler = createMcpHandler(
       },
     );
 
-    // Shown in Claude Code as /glassbox:align — the human asks the agent to realign on demand.
+    // Shown in Claude Code as /mcp__glassbox__align — the human asks the agent to realign on demand.
     server.registerPrompt(
       "align",
       {

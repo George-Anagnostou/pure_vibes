@@ -6,7 +6,7 @@
 //   warn  -> ask the human to confirm
 //   allow -> proceed
 // Routine local work (reading/editing files, tests) never leaves the machine.
-import { api, latestContract, readStdin } from "./glassbox-lib.mjs";
+import { api, isStale, latestContract, readStdin } from "./glassbox-lib.mjs";
 
 const input = await readStdin();
 const tool = input.tool_name ?? "";
@@ -76,7 +76,8 @@ try {
 } catch {
   process.exit(0); // Glass Box unreachable: fail open, the database budget rule still holds.
 }
-if (!latest || latest.status === "none") process.exit(0);
+// An abandoned review or an old task's contract must not block today's work.
+if (!latest || latest.status === "none" || isStale(latest)) process.exit(0);
 if (latest.status !== "approved") {
   decide(
     "deny",

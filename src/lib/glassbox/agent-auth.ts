@@ -38,7 +38,7 @@ export async function verifyAgentKey(key: string | undefined) {
   if (!data)
     throw new HttpError(
       401,
-      "Unknown Glass Box agent key. Mint a new one at /connect.",
+      "Unknown or revoked Glass Box agent key. Mint a new one at /connect.",
     );
   await admin
     .from("agent_keys")
