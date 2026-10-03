@@ -1,7 +1,7 @@
 import "server-only";
 import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, Output } from "ai";
-import { CritiqueSchema, RevealSchema, type Critique, type Revealed } from "@/lib/glassbox/types";
+import { CritiqueSchema, DIALS, HARD_LINES, RevealSchema, type Approval, type Critique, type Revealed } from "@/lib/glassbox/types";
 
 const model = () => anthropic(process.env.GLASSBOX_MODEL || "claude-sonnet-5-5");
 
@@ -74,5 +74,30 @@ export async function revealAndCritique(input: Input) {
   } catch (e) {
     console.error("[glassbox] reveal failed, failing closed:", e);
     return { revealed: REFUSED_REVEAL, critique: REFUSED_CRITIQUE };
+  }
+}
+
+// After the human re-ranks: turn their priorities into concrete instructions for the agent.
+export async function planGuidance({ task, plan }: Input, approval: Approval): Promise<string> {
+  const dials = Object.entries(approval.dials)
+    .map(([k, v]) => {
+      const d = DIALS[k as keyof typeof DIALS];
+      return `${k}: ${v.toFixed(2)} (0 = ${d.left}, 1 = ${d.right})`;
+    })
+    .join("\n");
+  const lines = Object.entries(approval.hard_lines)
+    .filter(([, on]) => on)
+    .map(([k]) => HARD_LINES[k as keyof typeof HARD_LINES] ?? k)
+    .join("; ");
+  try {
+    const { text } = await generateText({
+      model: model(),
+      maxOutputTokens: 400,
+      system: "You rewrite an AI agent's plan guidance to match the priorities a human just chose. Output 2-4 short imperative sentences the agent must follow: what to build/do instead, what to drop. Be concrete (name technologies/steps). No preamble.",
+      prompt: `TASK:\n${task}\n\nORIGINAL PLAN:\n${plan}\n\nHUMAN'S RANKED PRIORITIES (highest first):\n${approval.ranked_priorities.join(" > ")}\n\nDIALS:\n${dials}\n\nHARD LINES: ${lines}; budget $${(approval.budget_cents / 100).toFixed(2)}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
+    });
+    return text.trim();
+  } catch {
+    return `Re-plan with priorities in this order: ${approval.ranked_priorities.join(" > ")}. Respect hard lines: ${lines}.`;
   }
 }
