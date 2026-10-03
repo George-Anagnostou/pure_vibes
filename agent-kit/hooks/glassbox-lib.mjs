@@ -1,6 +1,6 @@
 // Shared helpers for the Glass Box Claude Code hooks. No dependencies: Node 18+ only.
 // Config comes from the environment (set in .claude/settings.local.json "env"):
-//   GLASSBOX_URL        e.g. https://pure-vibes-smoky.vercel.app
+//   GLASSBOX_URL        e.g. https://glassbox.cards
 //   GLASSBOX_AGENT_KEY  gb_... minted on the Glass Box dashboard
 
 export const base = (
