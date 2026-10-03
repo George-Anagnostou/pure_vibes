@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 const KEY_PLACEHOLDER = "gb_YOUR_KEY";
 
-type MintState =
+export type MintState =
   | { kind: "idle" }
   | { kind: "busy" }
   | { kind: "done"; key: string; name: string }
@@ -26,7 +27,7 @@ async function mintKey(name: string): Promise<string> {
   return body.key;
 }
 
-function useMint(onMinted?: () => void) {
+export function useMint(onMinted?: () => void) {
   const [state, setState] = useState<MintState>({ kind: "idle" });
   async function mint(name: string) {
     setState({ kind: "busy" });
@@ -142,7 +143,7 @@ export function setupSnippets(origin: string, key: string) {
   ];
 }
 
-function CopyBlock({ code }: { code: string }) {
+export function CopyBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative">
@@ -168,7 +169,7 @@ function CopyBlock({ code }: { code: string }) {
   );
 }
 
-function MintForm({
+export function MintForm({
   state,
   onMint,
 }: {
@@ -183,24 +184,21 @@ function MintForm({
           event.preventDefault();
           onMint(name);
         }}
-        className="flex gap-2"
+        className={styles.inlineForm}
       >
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={100}
           aria-label="Agent name"
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-paper px-3 outline-none focus:border-ink"
+          className={styles.fieldInput}
         />
-        <button
-          disabled={state.kind === "busy"}
-          className="min-h-11 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-60"
-        >
+        <button disabled={state.kind === "busy"} className={styles.btnDark}>
           {state.kind === "busy" ? "Creating…" : "Mint key"}
         </button>
       </form>
       {state.kind === "error" && (
-        <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+        <p role="alert" className={styles.alertCard} style={{ marginTop: 8 }}>
           {state.message}
         </p>
       )}

@@ -354,25 +354,12 @@ export function AlignPanel({
       }
     >
       <div>
-        {(review.understanding || approach) && (
-          <div className={local.contextList}>
-            {review.understanding && (
-              <Context title="What i think the task is">
-                {review.understanding}
-              </Context>
-            )}
-            {approach && (
-              <Context title="How i'll approach it">{approach}</Context>
-            )}
-          </div>
-        )}
-
         <section className={styles.card} aria-labelledby={`pri-${review.id}`}>
           <h2 id={`pri-${review.id}`} className={styles.cardTitle}>
             Your priorities
           </h2>
           <p className={styles.cardHint}>
-            Drag to reorder — #1 wins every conflict. Tap a tile to remove it.
+            Drag to reorder. #1 wins every conflict. Tap a tile to remove it.
           </p>
           {board.ranked.length ? (
             <RankedPriorities
@@ -426,13 +413,25 @@ export function AlignPanel({
         <section className={styles.card}>
           <ExtraInstructions items={instructions} onChange={setInstructions} />
         </section>
+
+        {/* Agent context sits at the bottom of the stack (Kathryn). */}
+        {(review.understanding || approach) && (
+          <div className={local.contextList}>
+            {review.understanding && (
+              <Context title="What i think the task is">
+                {review.understanding}
+              </Context>
+            )}
+            {approach && (
+              <Context title="How i'll approach it">{approach}</Context>
+            )}
+          </div>
+        )}
       </div>
 
       <aside className={styles.sideSticky}>
         <div className={styles.optCard}>
-          <p className={styles.optCardTitle}>
-            Additional optional values you may add
-          </p>
+          <p className={styles.optCardTitle}>Worth adding</p>
           <div className={styles.optList}>
             {board.pool.length === 0 && (
               <p className={local.empty}>

@@ -3,7 +3,8 @@ import Link from "next/link";
 import styles from "./glassbox.module.css";
 
 // Frosted app bar from the Figma desktop frame (node 5:2031):
-// Profile : Account on the left, wordmark centered.
+// Profile : Account on the left, wordmark centered (links home),
+// Connect on the right.
 
 export function TopBar({ minimal = false }: { minimal?: boolean }) {
   return (
@@ -28,15 +29,23 @@ export function TopBar({ minimal = false }: { minimal?: boolean }) {
           </Link>
         )}
       </span>
-      <Image
-        src="/logo.svg"
-        alt="Glass Box"
-        width={140}
-        height={16}
-        priority
-        className={styles.topBarLogo}
-      />
-      <span className={styles.topBarSide} />
+      <Link href="/" aria-label="Glass Box home">
+        <Image
+          src="/logo.svg"
+          alt="Glass Box"
+          width={140}
+          height={16}
+          priority
+          className={styles.topBarLogo}
+        />
+      </Link>
+      <span className={`${styles.topBarSide} ${styles.topBarSideEnd}`}>
+        {!minimal && (
+          <Link href="/connect" className={styles.topBarLink}>
+            Connect
+          </Link>
+        )}
+      </span>
     </header>
   );
 }

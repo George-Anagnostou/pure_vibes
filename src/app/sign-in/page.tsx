@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/sign-in-form";
+import styles from "@/components/glassbox/glassbox.module.css";
+import { Shell } from "@/components/glassbox/shell";
 import { createClient } from "@/lib/supabase/server";
 import { safeNextPath } from "@/lib/auth-navigation";
 
@@ -20,26 +22,37 @@ export default async function SignInPage({
   const { data } = await supabase.auth.getUser();
   if (data.user) redirect(next);
   return (
-    <main className="mx-auto max-w-lg px-4 py-10">
-      <h1 className="text-3xl font-black tracking-tight">
-        Your Glass Box account
-      </h1>
-      <p className="mt-2 text-ink-soft">
-        Sign in or create an account with your email. No password needed.
-      </p>
-      {params.error && (
-        <p role="alert" className="mt-5 rounded-xl bg-warn-bg p-4 text-warn">
-          That sign-in link couldn&apos;t be verified. Enter the code from your
-          latest email below, or request a new email. Older links may have
-          expired or already been used.
+    <Shell minimal>
+      <main className={styles.onboardShell}>
+        <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
+          Your Glass Box account
+        </h1>
+        <p className={styles.agentName}>
+          Sign in or create an account with your email. No password needed.
         </p>
-      )}
-      <div className="mt-6">
-        <SignInForm nextPath={next} allowExistingCode={Boolean(params.error)} />
-      </div>
-      <Link href="/" className="mt-6 inline-block text-sm underline">
-        Back to Glass Box
-      </Link>
-    </main>
+        {params.error && (
+          <p
+            role="alert"
+            className={styles.warnCard}
+            style={{ marginBottom: 16 }}
+          >
+            That sign-in link couldn&apos;t be verified. Enter the code from
+            your latest email below, or request a new email. Older links may
+            have expired or already been used.
+          </p>
+        )}
+        <div className={styles.onboardCard}>
+          <SignInForm
+            nextPath={next}
+            allowExistingCode={Boolean(params.error)}
+          />
+        </div>
+        <p style={{ textAlign: "center" }}>
+          <Link href="/" className={styles.mutedLink}>
+            Back to Glass Box
+          </Link>
+        </p>
+      </main>
+    </Shell>
   );
 }
