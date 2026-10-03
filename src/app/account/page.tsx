@@ -80,8 +80,9 @@ export default async function AccountPage({
       </div>
       {params.billing === "success" && (
         <p role="status" className="rounded-xl bg-go-bg p-4 text-go">
-          You&apos;ve returned from checkout. Your subscription status below updates
-          after Stripe confirms payment. Refresh status if it&apos;s still pending.
+          You&apos;ve returned from checkout. Your subscription status below
+          updates after Stripe confirms payment. Refresh status if it&apos;s
+          still pending.
         </p>
       )}
       {params.billing === "cancelled" && (
