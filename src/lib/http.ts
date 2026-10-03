@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { appUrl } from "@/lib/env";
+import { trustedOrigins } from "@/lib/env";
 
 export class HttpError extends Error {
   constructor(
@@ -12,7 +12,8 @@ export class HttpError extends Error {
 }
 
 export function assertSameOrigin(request: Request) {
-  if (request.headers.get("origin") !== appUrl()) {
+  const origin = request.headers.get("origin");
+  if (!origin || !trustedOrigins().has(origin)) {
     throw new HttpError(403, "Request origin is not allowed.");
   }
 }
