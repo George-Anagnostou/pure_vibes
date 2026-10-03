@@ -39,6 +39,7 @@ export const config = {
     "/inbox/:path*",
     "/profile/:path*",
     "/dashboard/:path*",
+    "/connect/:path*",
     "/api/reviews/:path*",
     "/api/agent-keys/:path*",
   ],
