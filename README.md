@@ -24,16 +24,16 @@ Run `npm run check`, `npm run format:check`, and `npm run build` before opening 
 
 ## Connect an agent to Glass Box
 
-1. Sign in at **https://pure-vibes-smoky.vercel.app/connect** (email sign-in link or code).
+1. Sign in at **https://glass-box-app.vercel.app/connect** (email sign-in link or code).
 2. Click **Create my key**. Your agent key (`gb_…`) is shown once and filled into every command on that page.
 3. Paste the command for your client. These are the same commands `/connect` shows; replace `gb_…` with your key.
 
-The MCP endpoint is `https://pure-vibes-smoky.vercel.app/api/mcp/mcp` (streamable HTTP, `Authorization: Bearer gb_…`).
+The MCP endpoint is `https://glass-box-app.vercel.app/api/mcp/mcp` (streamable HTTP, `Authorization: Bearer gb_…`).
 
 **Claude Code** (added for every project):
 
 ```bash
-claude mcp add --transport http --scope user glassbox https://pure-vibes-smoky.vercel.app/api/mcp/mcp --header "Authorization: Bearer gb_…"
+claude mcp add --transport http --scope user glassbox https://glass-box-app.vercel.app/api/mcp/mcp --header "Authorization: Bearer gb_…"
 ```
 
 Restart Claude Code and type `/mcp`; `glassbox` should say connected.
@@ -42,7 +42,7 @@ Restart Claude Code and type `/mcp`; `glassbox` should say connected.
 
 ```bash
 echo 'export GLASSBOX_API_KEY=gb_…' >> ~/.zshrc && export GLASSBOX_API_KEY=gb_…
-codex mcp add glassbox --url https://pure-vibes-smoky.vercel.app/api/mcp/mcp --bearer-token-env-var GLASSBOX_API_KEY
+codex mcp add glassbox --url https://glass-box-app.vercel.app/api/mcp/mcp --bearer-token-env-var GLASSBOX_API_KEY
 ```
 
 Open Codex in a new terminal and run `/mcp`. On bash, use `~/.bashrc`.
@@ -57,7 +57,7 @@ Open Codex in a new terminal and run `/mcp`. On bash, use `~/.bashrc`.
       "args": [
         "-y",
         "mcp-remote",
-        "https://pure-vibes-smoky.vercel.app/api/mcp/mcp",
+        "https://glass-box-app.vercel.app/api/mcp/mcp",
         "--header",
         "Authorization: Bearer gb_…"
       ]
@@ -74,31 +74,31 @@ Quit and reopen Claude Desktop.
 {
   "mcpServers": {
     "glassbox": {
-      "url": "https://pure-vibes-smoky.vercel.app/api/mcp/mcp",
+      "url": "https://glass-box-app.vercel.app/api/mcp/mcp",
       "headers": { "Authorization": "Bearer gb_…" }
     }
   }
 }
 ```
 
-Clients that only take a URL can use `https://pure-vibes-smoky.vercel.app/api/mcp/mcp?key=gb_…`. The key ends up in logs and history that way, so prefer the header. Requests without a valid key get `401` with a `WWW-Authenticate: Bearer` challenge.
+Clients that only take a URL can use `https://glass-box-app.vercel.app/api/mcp/mcp?key=gb_…`. The key ends up in logs and history that way, so prefer the header. Requests without a valid key get `401` with a `WWW-Authenticate: Bearer` challenge.
 
 **Optional: pop-up window for Claude Code.** On `/connect`, open "Optional: pop-up window for Claude Code" to get a one-time install command (it works once and expires after a few minutes), then run it in your project folder:
 
 ```bash
-curl -fsSL https://pure-vibes-smoky.vercel.app/i/<CODE> | sh
+curl -fsSL https://glass-box-app.vercel.app/i/<CODE> | sh
 ```
 
 It installs the agent kit: the MCP server, hooks that open the Glass Box pop-up whenever Claude Code checks in (Chrome app window on macOS, default browser elsewhere; over SSH/headless or with `GLASSBOX_POPUP=off` the agent shows you the link instead), and project instructions to check in before acting. Restart Claude Code in that folder and type `/mcp`.
 
-**REST API**: `POST https://pure-vibes-smoky.vercel.app/api/review` (same fields as the MCP `align` tool) returns `review_id` and `align_url`; poll `GET https://pure-vibes-smoky.vercel.app/api/reviews/<review_id>/contract` until the human approves. Both take `Authorization: Bearer gb_…`.
+**REST API**: `POST https://glass-box-app.vercel.app/api/review` (same fields as the MCP `align` tool) returns `review_id` and `align_url`; poll `GET https://glass-box-app.vercel.app/api/reviews/<review_id>/contract` until the human approves. Both take `Authorization: Bearer gb_…`.
 
 ```bash
-curl -X POST https://pure-vibes-smoky.vercel.app/api/review \
+curl -X POST https://glass-box-app.vercel.app/api/review \
   -H "Authorization: Bearer gb_…" -H "Content-Type: application/json" \
   -d @approach.json
 
-curl https://pure-vibes-smoky.vercel.app/api/reviews/REVIEW_ID/contract \
+curl https://glass-box-app.vercel.app/api/reviews/REVIEW_ID/contract \
   -H "Authorization: Bearer gb_…"
 ```
 
