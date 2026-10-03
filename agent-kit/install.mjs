@@ -123,7 +123,7 @@ settings.hooks = {
   ],
   PostToolUse: [
     {
-      matcher: "mcp__glassbox__align",
+      matcher: "mcp__glassbox__align|mcp__glassbox__answer_challenges",
       hooks: [hook("glassbox-popup.mjs", 10)],
     },
   ],

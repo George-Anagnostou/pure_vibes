@@ -263,8 +263,64 @@ export const SuggestionSchema = z.object({
 });
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 
+// ---- Challenges: real-world situations that force the agent to choose between its priorities ----
+export const ChallengeSchema = z.object({
+  id: z.string().describe("c1, c2, …"),
+  scenario: z
+    .string()
+    .describe(
+      "A concrete, realistic situation the agent is likely to hit on THIS task, with specifics (numbers, times, names), ending in a question, e.g. 'Your top pick only has 9:45pm or bar seats; a good second choice has 7:30. Which do you book?'",
+    ),
+  tests: z
+    .array(z.string())
+    .describe(
+      "The two agent priorities this pits against each other, copied exactly from its list (e.g. ['Food quality', 'Fit your schedule'])",
+    ),
+  why_it_matters: z
+    .string()
+    .describe("One line to the human: why their answer here matters"),
+});
+export type Challenge = z.infer<typeof ChallengeSchema>;
+
+// The agent's answer to one challenge (sent with the answer_challenges tool).
+export const ChallengeAnswerSchema = z.object({
+  id: z.string().trim().min(1).max(10).describe("The challenge id, e.g. 'c1'"),
+  response: z
+    .string()
+    .trim()
+    .min(1)
+    .max(600)
+    .describe("Exactly what you'd do in this situation, concretely"),
+  favors: z
+    .string()
+    .trim()
+    .max(120)
+    .describe(
+      "Which of the two priorities wins in your answer (copy its name), or 'ask the human'",
+    ),
+  would_ask_human: z
+    .boolean()
+    .describe("Would you stop and ask the human before acting here?"),
+});
+export type ChallengeAnswer = z.infer<typeof ChallengeAnswerSchema>;
+
+// The human's ruling on one challenge.
+export const ChallengeRulingSchema = z.object({
+  id: z.string().trim().min(1).max(10),
+  scenario: z.string().trim().max(600),
+  agent_response: z.string().trim().max(600),
+  approved: z.boolean(),
+  instead: z.string().trim().max(600).optional(),
+});
+export type ChallengeRuling = z.infer<typeof ChallengeRulingSchema>;
+
 // ---- Critique (call #2, independent; everything but suggestions stays under the hood) ----
 export const CritiqueSchema = z.object({
+  challenges: z
+    .array(ChallengeSchema)
+    .describe(
+      "3-5 real-world challenges, each forcing a trade-off between two of the agent's priorities",
+    ),
   suggestions: z
     .array(SuggestionSchema)
     .describe("2-5 suggestions, most important first"),
@@ -314,6 +370,12 @@ export type Contract = {
   added_priorities: string[]; // priorities the human added
   removed_priorities: string[]; // agent priorities the human deleted: don't optimize for these
   decisions: ContractDecision[];
+  // How to handle situations Glass Box tested: do_this is binding when it comes up.
+  situations: {
+    situation: string;
+    do_this: string;
+    human_overrode_you: boolean;
+  }[];
   instructions_from_human: string[]; // free-text steps/instructions the human typed
   plan_guidance: string;
   hard_lines: string[]; // e.g. ["no_unauthorized_access", "budget_max_cents:2000"]
@@ -337,6 +399,7 @@ export type DecisionAnswer = z.infer<typeof DecisionAnswerSchema>;
 
 export const ApprovalSchema = z.object({
   decisions: z.array(DecisionAnswerSchema).max(20).optional(),
+  challenges: z.array(ChallengeRulingSchema).max(10).optional(),
   instructions: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
   ranked_priorities: z
     .array(z.string().trim().min(1).max(300))

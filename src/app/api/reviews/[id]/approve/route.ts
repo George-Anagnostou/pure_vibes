@@ -14,6 +14,7 @@ import {
   json,
   readJson,
 } from "@/lib/http";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -98,6 +99,16 @@ export async function POST(
       },
     );
     if (rpcError) throw new HttpError(409, rpcError.message);
+    // Challenge rulings ride alongside the contract the RPC just created for this
+    // (verified-owner) review; contracts aren't writable by the session client.
+    if (approval.challenges?.length) {
+      const { error: chErr } = await createAdminClient()
+        .from("contracts")
+        .update({ challenges: approval.challenges as Json })
+        .eq("review_id", id)
+        .eq("user_id", user.id);
+      if (chErr) throw chErr;
+    }
     return json({ contract_id: contractId, plan_guidance: guidance });
   } catch (error) {
     return errorResponse(error);

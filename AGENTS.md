@@ -1,15 +1,32 @@
-# Working on Pure Vibes
+# Working on GlassBox
 
-This runbook is for George, Katie, Nick, and their coding agents. Run commands from the repository root unless stated otherwise. Read `README.md` for the team's current product ideas, `docs/TEAM_SETUP.md` for account configuration, and `docs/ARCHITECTURE.md` for integration boundaries before changing integrations.
+This runbook is for George, Kathryn, Nick, and their coding agents. Run commands from the repository root unless stated otherwise. Read `README.md` for product context, `docs/TEAM_SETUP.md` for account configuration, and `docs/ARCHITECTURE.md` for integration boundaries before changing integrations.
 
 ## Repository and session orientation
 
-- Canonical repository: **`George-Anagnostou/pure_vibes`** — https://github.com/George-Anagnostou/pure_vibes.
-- The upstream default branch is currently **`master`**, not `main`. "Main repo" means the canonical repository, not a branch named `main`. Discover the default before starting work in case it changes.
+- Canonical repository: **`George-Anagnostou/pure_vibes`** — https://github.com/George-Anagnostou/pure_vibes. Do not push or open PRs against `ncentis/pure_vibes`; it is not the canonical repo.
+- `origin` must be `https://github.com/George-Anagnostou/pure_vibes`. The default branch is **`master`**. Verify the remote and default branch at each session start.
 - Inspect `git status --short`, `git remote -v`, and `git branch --show-current` first. Preserve existing teammate changes; stage only files belonging to your task.
 - **All repo editing happens in a dedicated Git worktree.** Never edit files in the shared base checkout. Create one worktree per person/task on its own branch before making changes; this keeps simultaneous edits isolated. Push that branch and open its PR from the worktree. Coordinate task/file ownership if branches touch overlapping areas.
 - **Keep work synchronized.** At the start of a task and at least once each work session, fetch/prune remote branches and check open issues and PRs for related work. Before editing, start from the latest default branch. During active collaboration, check for merged work frequently (at least daily and before substantial dependent changes); before opening/updating a PR, fetch and rebase your own branch onto the latest default branch, resolve conflicts in your worktree, rerun checks, and push. Keep changes small and PRs focused so teammates can review/merge promptly. Never rebase or force-push a branch another person is using; coordinate first.
 - Read this file at the start of each agent session. If your coding tool does not automatically load `AGENTS.md`, explicitly ask it to read it. A tool authenticated on one teammate's machine is not automatically available to another teammate or agent.
+- At session start, report the current branch, `origin` URL/canonical repo, and ownership area for the task. Team members should accept repository invitations at https://github.com/George-Anagnostou/pure_vibes/invitations.
+
+## Team ownership and product contract
+
+Ask the owner before editing files assigned to another teammate. Keep PRs within one ownership area where possible; disclose cross-owner files in the PR title and get the affected owner's approval before merging.
+
+| Owner                            | Primary files / area                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Nick (`ncentis`)                 | Product direction and `PRODUCT.md`; `src/lib/glassbox/**` (agent reasoning/checkpoints/contracts), `src/lib/glassbox/types.ts`, review/MCP API routes, `scripts/**`, `fixtures/**`, `supabase/migrations/**` |
+| Kathryn (`kathryn-salad-studio`) | UI: `src/app/approve/**`, `src/app/dashboard/**`, `src/app/profile/**`, `src/app/page.tsx`, `src/app/layout.tsx`, `src/components/**`, `src/app/globals.css`, `public/**`                                    |
+| George (`George-Anagnostou`)     | Infrastructure/backend: auth, Stripe, Supabase client integration, CI/deploy/Vercel configuration, `src/proxy.ts`, `src/lib/env.ts`, `src/lib/http.ts`, `package.json`, `AGENTS.md`, and `docs/**`           |
+
+`src/lib/glassbox/types.ts` is the shared API contract consumed by the UI and is owned by Nick. Ask Nick before changing it. After 3:00pm PT on hackathon day, changes must be additive; do not rename or remove contract fields.
+
+Only Nick creates Supabase migrations and pushes migrations to the shared Supabase project. Never edit an already-pushed migration; create a new one. Before a shared database push or other shared/destructive action, describe the impact and wait for the responsible owner's explicit OK.
+
+On hackathon day (event date to be confirmed), target a ~5:00pm PT finish: 4:00pm PT feature freeze (only demo-blocking fixes afterward) and 4:30pm PT freeze on `master` (nothing merges after that).
 
 ## Install tools and dependencies
 
@@ -47,19 +64,20 @@ For nvm installation, follow https://github.com/nvm-sh/nvm#installing-and-updati
    cd pure_vibes
    git fetch origin
    BASE_BRANCH=$(gh repo view George-Anagnostou/pure_vibes --json defaultBranchRef --jq '.defaultBranchRef.name')
-   TASK="onboarding-$USER"
-   git worktree add "../pure_vibes-$TASK" -b "docs/$TASK" "origin/$BASE_BRANCH"
-   cd "../pure_vibes-$TASK"
+   OWNER=george # choose nick, george, or kathryn
+   TASK=onboarding
+   git worktree add "../pure_vibes-$OWNER-$TASK" -b "$OWNER/$TASK" "origin/$BASE_BRANCH"
+   cd "../pure_vibes-$OWNER-$TASK"
    nvm install
    nvm use
    npm ci
    npm run setup
    ```
 
-   If the base repo is already cloned, reuse it and create a uniquely named worktree beside it; do not clone inside another checkout. The example uses a username-based task name; change it if it is already in use. If using Node 24 directly, skip the nvm commands. Install dependencies and create `.env.local` separately in each worktree as needed (`node_modules` and env files are not shared).
+   If the base repo is already cloned, reuse it and create a uniquely named worktree beside it; do not clone inside another checkout. Choose your team owner prefix and a unique task name. If using Node 24 directly, skip the nvm commands. Install dependencies and create `.env.local` separately in each worktree as needed (`node_modules` and env files are not shared).
 
 3. Populate `.env.local` from the team vault and your own development credentials. `npm run setup` copies `.env.example` without overwriting an existing file. Never print or paste the env file into agent output.
-4. Run `npm run env:check`, `npm run check`, then `npm run dev`. Open `http://localhost:3000`. The starter page and code checks work without cloud keys; live integration actions require configuration.
+4. Run `npm run env:check`, `npm run check`, then `npm run dev`. Open `http://localhost:3000`. The developer console and code checks work without cloud keys; live integration actions require configuration.
 5. Complete the relevant integration setup below and the acceptance checklist in `docs/TEAM_SETUP.md`.
 
 ### Environment ownership
@@ -78,7 +96,7 @@ App environment variables, CLI logins, and agent/MCP authentication are separate
 
 ## Invoke project tools
 
-Use the terminal/shell tool exposed by your agent client for the same commands a teammate would run. Prefer existing package scripts over ad hoc scripts or installing duplicate dependencies.
+Use the terminal/shell tool exposed by your agent client for the same commands a teammate would run. Prefer existing package scripts over ad hoc scripts or installing duplicate dependencies. Use npm only; do not add pnpm/yarn lockfiles. Only change `package-lock.json` when deliberately changing dependencies, and state that in the PR.
 
 | Task                                                 | Command                                                                         |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -95,20 +113,22 @@ Use the terminal/shell tool exposed by your agent client for the same commands a
 
 ### Supabase: auth, schema, and data
 
-For the **shared hosted development project**, authenticate and link this checkout:
+For the shared hosted Supabase project named **`pure_vibes`**, authenticate and link this checkout to the verified project ref. A name alone is not enough to select a project: confirm its organization, project ref, and dashboard first. The project ref is not a secret; API keys and access tokens are. `supabase link` only configures this local checkout; it does not connect the GitHub repository or deploy migrations.
 
 ```bash
 npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase projects list
+npx supabase link --project-ref PURE_VIBES_PROJECT_REF
+npx supabase migration list --linked
 ```
 
-Get the project ref from the owner/dashboard; do not infer it from an unrelated accessible project. Coordinate migration deployment with the teammate who owns the shared database:
+Ensure `.env.local`'s `NEXT_PUBLIC_SUPABASE_URL` host uses the same project ref (for hosted projects, `<project-ref>.supabase.co`) and that its publishable and server secret keys came from this same project. Never print or commit `.env.local` or CLI credentials. Each teammate links their own checkout. In Vercel, configure the same project's URL/keys in the intended environment; GitHub itself does not store the app's Supabase connection. Only Nick creates migrations and applies them to the shared project:
 
 ```bash
-npx supabase migration new descriptive_name
+npx supabase migration new descriptive_name # Nick only; others propose schema changes to Nick
 # Edit the new SQL migration; test on local Supabase when available.
 npx supabase db push --dry-run
-npm run db:push
+npm run db:push # Nick only, after explicit approval for the shared DB action
 npm run db:types -- --linked
 ```
 
@@ -133,19 +153,19 @@ stripe login
 npm run stripe:listen
 ```
 
-Set the printed signing secret locally and restart the app. Configure the recurring test price and customer portal in the same sandbox. Use the starter page's subscription and billing buttons to exercise `src/app/api/billing/*`.
+Set the printed signing secret locally and restart the app. Configure the recurring test price and customer portal in the same sandbox. Use the developer console's subscription and billing buttons to exercise `src/app/api/billing/*`.
 
 The hosted destination is `/api/stripe/webhook`, subscribed to `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. Use its separate secret on Vercel. Multiple teammates can run listeners; duplicate events are handled by the event ledger. Test Checkout with card `4242 4242 4242 4242`, a future expiry, and a valid test CVC. Generic `stripe trigger` customers are not mapped to app users, so those fixtures alone do not prove billing synchronization.
 
 ### AI: model calls and workflows
 
-The app uses `ai` + `@ai-sdk/openai`, not a separate OpenAI CLI. Configure API billing and `OPENAI_API_KEY`, then sign in and run a brief through the starter page. Implementation: `src/lib/ai/workflow.ts`; authenticated execution/history: `src/app/api/workflows/route.ts`.
+The app uses `ai` + `@ai-sdk/openai`, not a separate OpenAI CLI. Configure API billing and `OPENAI_API_KEY`, then sign in and run a brief through the developer console. Implementation: `src/lib/ai/workflow.ts`; authenticated execution/history: `src/app/api/workflows/route.ts`.
 
 The example normalizes a brief, generates a Zod-validated plan, and saves it in Supabase. It permits 10 attempts/user/hour and has request/token limits. Changing providers requires updating the model adapter, dependency, env example/checker, and docs. A coding-agent subscription or its MCP connection does not automatically supply the app's model API key.
 
 ### Vercel: link and deploy
 
-Git integration is the usual deployment path: import the canonical repo into the team's Vercel project, add hosted env values, and configure the production branch to match the actual upstream default. For CLI work:
+Git integration is the usual deployment path: import `George-Anagnostou/pure_vibes` into the team's Vercel project, add hosted env values, and configure the production branch to `master`. For CLI work:
 
 ```bash
 npx vercel@latest login
@@ -171,7 +191,7 @@ Preview API calls require a matching `APP_URL` and Supabase redirect allowlist. 
 
 ## Branches, commits, and PRs to the canonical repo
 
-With write access, `origin` should point to `George-Anagnostou/pure_vibes`. Keep the base checkout clean. Discover the default, then create a **separate worktree and task branch** before editing:
+All teammates should have Write access to the canonical repo. `origin` must point to `George-Anagnostou/pure_vibes`; use no fork/upstream workflow. Keep the base checkout clean. Check open PRs, fetch the latest default branch, then create a **separate worktree and task branch** before editing:
 
 ```bash
 gh auth status
@@ -180,13 +200,15 @@ gh issue list --repo George-Anagnostou/pure_vibes --state open
 gh pr list --repo George-Anagnostou/pure_vibes --state open
 git fetch origin --prune
 BASE_BRANCH=$(gh repo view George-Anagnostou/pure_vibes --json defaultBranchRef --jq '.defaultBranchRef.name')
-git worktree add ../pure_vibes-feat-short-description -b feat/short-description "origin/$BASE_BRANCH"
-cd ../pure_vibes-feat-short-description
+OWNER=george # choose nick, george, or kathryn
+TASK=short-description
+git worktree add "../pure_vibes-$OWNER-$TASK" -b "$OWNER/$TASK" "origin/$BASE_BRANCH"
+cd "../pure_vibes-$OWNER-$TASK"
 npm ci
 npm run setup
 ```
 
-Replace `feat/short-description` and the worktree path with meaningful unique names; use `fix/` or `docs/` when appropriate. One task/branch/worktree per person or agent. Do not reuse another teammate's worktree or edit the base checkout. Keep `.env.local` private in each worktree. Do not push task work directly to the default branch.
+Use owner prefixes `nick/`, `george/`, or `kathryn/`; one task/branch/worktree per person or agent. Do not reuse another teammate's worktree or edit the base checkout. Keep `.env.local` private in each worktree. Never push task work directly to `master`.
 
 Before pulling or rebasing, make sure your worktree is clean (`git status --short`). Commit or safely stash your own work first; never overwrite another person's edits. To refresh a task branch after others merge:
 
@@ -196,7 +218,9 @@ git rebase "origin/$BASE_BRANCH"
 # Resolve conflicts only in your own worktree, then rerun checks.
 ```
 
-Use `git pull --rebase` only when the task branch has the correct upstream configured and the worktree is clean. Do not routinely merge the default branch into a task branch (it creates noisy history). If the branch has already been shared with other contributors, coordinate before rebasing because rebasing changes its commit IDs.
+Use `git pull --rebase` only when the task branch tracks the correct `origin` branch and the worktree is clean. Do not routinely merge the default branch into a task branch (it creates noisy history). After any merge to `master`, rebase your own continuing worktree onto `origin/master`. If the branch is used by another contributor, coordinate before rebasing because rebasing changes commit IDs.
+
+If a rebase conflicts in a file you do not own, stop and ask its owner; resolve only your own files. Never run `git reset --hard`, `git clean -fd`, `git checkout -- .`, or `git push --force`. If your own branch needs rewriting after a rebase, coordinate first and use `--force-with-lease`, never plain `--force`.
 
 Before submitting:
 
@@ -212,31 +236,25 @@ git status --short
 git add path/to/changed-file path/to/another-changed-file
 git diff --cached
 git commit -m "Describe the change"
-git push -u origin feat/short-description
+git push -u origin george/short-description
 gh pr create --repo George-Anagnostou/pure_vibes \
-  --base "$BASE_BRANCH" --head feat/short-description \
+  --base master --head george/short-description \
   --title "Describe the change" \
   --body "Summary: ...
 Verification: ...
 Setup or migrations: ..."
 ```
 
-Replace the staging paths and PR text with your actual files/results. Recompute `BASE_BRANCH` if using a new shell. Include the purpose, tests run/skipped, required env names (never values), migration/deployment steps, and screenshots for visible UI changes. Use `--draft` on `gh pr create` for unfinished work. Add `--reviewer GITHUB_LOGIN` when you know the teammate's GitHub username.
+Replace the staging paths, owner prefix, and PR text with your actual files/results. Include purpose, tests run/skipped, required env names (never values), migration/deployment steps, and screenshots for visible UI changes. If a PR touches another owner's files, say so in the title and request their approval. Keep PRs small and frequent; use squash merge. `master` is protected: PRs require one approval and the `app` and `database` checks; stale approvals are dismissed. Force-pushes and branch deletion are blocked. Even a PR limited to your own files needs an independent approval under this branch rule.
 
-Without write access, request access or use a **fork**. Clone your fork, keep `origin` pointing to it, and configure `upstream` to `https://github.com/George-Anagnostou/pure_vibes.git` if absent. Fetch `upstream` and branch from `upstream/$BASE_BRANCH`; push to your fork's `origin`. Open the PR against the canonical repository using:
-
-```bash
-gh pr create --repo George-Anagnostou/pure_vibes \
-  --base "$BASE_BRANCH" --head YOUR_GITHUB_LOGIN:feat/short-description \
-  --title "Describe the change" --body "Summary and verification: ..."
-```
+If a teammate has read-only or no access, ask George to grant Write access and accept the invitation; do not create a fork. This is the canonical team workflow.
 
 Inspect review and CI results with:
 
 ```bash
 gh pr view PR_NUMBER --repo George-Anagnostou/pure_vibes --web
 gh pr checks PR_NUMBER --repo George-Anagnostou/pure_vibes
-gh run list --repo George-Anagnostou/pure_vibes --branch feat/short-description
+gh run list --repo George-Anagnostou/pure_vibes --branch george/short-description
 gh run view RUN_ID --repo George-Anagnostou/pure_vibes --log-failed
 ```
 
@@ -246,9 +264,9 @@ After the PR is merged (or the task is abandoned), first stop any dev server/pro
 
 ```bash
 git worktree list
-git -C ../pure_vibes-feat-short-description status --short
-git worktree remove ../pure_vibes-feat-short-description
-git branch -d feat/short-description
+git -C ../pure_vibes-george-short-description status --short
+git worktree remove ../pure_vibes-george-short-description
+git branch -d george/short-description
 git worktree prune
 ```
 
@@ -259,7 +277,7 @@ Do not force-remove a worktree or delete a branch with uncommitted/unmerged work
 - Use Node 24 and npm. Commit `package-lock.json`; install with `npm ci`.
 - Keep integration credentials in `.env.local` / Vercel, never source, logs, or chat. Add new variable names and descriptions to `.env.example` and the environment checker.
 - Use the session-scoped Supabase client for user reads. Privileged writes require verified authentication or a verified Stripe webhook. Never accept user/customer IDs as authority from request bodies.
-- Add schema changes as new migrations. Preserve RLS, regenerate database types, and run SQL tests locally when Docker is available.
+- Only Nick creates migrations and pushes to shared Supabase. Preserve RLS, regenerate database types, and run SQL tests locally when Docker is available.
 - Keep payment amounts and price selection server-controlled. Billing access comes from synced Stripe state, not a redirect query parameter.
 - Keep AI workflows bounded and awaited. Do not describe request-time orchestration as a durable job system.
 - Run `npm run check`, `npm run format:check`, and `npm run build`. For schema changes, also run `npm run db:test` with local Supabase.

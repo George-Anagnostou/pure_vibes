@@ -3,6 +3,9 @@ import { appUrl } from "@/lib/env";
 import { HttpError } from "@/lib/http";
 import { revealAndCritique } from "@/lib/glassbox/llm";
 import type {
+  Challenge,
+  ChallengeAnswer,
+  ChallengeRuling,
   Contract,
   Critique,
   Decision,
@@ -32,6 +35,7 @@ export async function createReview(input: {
   userId: string;
   agentName: string;
   task: string;
+  understanding?: string; // what the agent thinks the task is
   plan?: string; // the agent's overall approach
   priorities?: StatedPriority[]; // what it's weighing, highest first
   decisions?: Decision[];
@@ -40,6 +44,7 @@ export async function createReview(input: {
   const priorities = input.priorities ?? [];
   const { revealed, critique } = await revealAndCritique({
     task: input.task,
+    understanding: input.understanding,
     plan: input.plan,
     stated: decisions,
     priorities,
@@ -53,6 +58,7 @@ export async function createReview(input: {
       plan: input.plan?.trim() || "(no approach given)",
       stated: decisions as unknown as Json,
       priorities: priorities as unknown as Json,
+      understanding: input.understanding?.trim() || null,
       revealed: revealed as unknown as Json,
       critique: critique as unknown as Json,
     })
@@ -68,7 +74,7 @@ export async function createReview(input: {
 }
 
 export const CONTRACT_INSTRUCTIONS =
-  "This is binding: the human decided, not you. Weigh trade-offs in the order of ranked_priorities (first wins), never optimize for anything in removed_priorities, and treat added_priorities as requirements. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
+  "This is binding: the human decided, not you. When a situation in `situations` comes up, do exactly its do_this. Weigh trade-offs in the order of ranked_priorities (first wins), never optimize for anything in removed_priorities, and treat added_priorities as requirements. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
 
 // "Priorities: Cost > Accuracy > Speed (added Cost; removed Completeness). Changed 2 of 6 decisions: …"
 export function describeDecisions(
@@ -109,6 +115,13 @@ export function describeDecisions(
 export function toContract(row: ContractRow): Contract {
   const hardLines = row.hard_lines as Record<string, boolean>;
   const answers = (row.decisions as DecisionAnswer[] | null) ?? [];
+  const situations = ((row.challenges as ChallengeRuling[] | null) ?? []).map(
+    (c) => ({
+      situation: c.scenario,
+      do_this: c.approved || !c.instead ? c.agent_response : c.instead,
+      human_overrode_you: !c.approved && !!c.instead,
+    }),
+  );
   const decisions = answers.map((d) => ({
     topic: d.topic,
     question: d.question,
@@ -140,6 +153,7 @@ export function toContract(row: ContractRow): Contract {
     added_priorities: added,
     removed_priorities: removed,
     decisions,
+    situations,
     instructions_from_human: instructions,
     plan_guidance: row.plan_guidance ?? "",
     hard_lines: lines,
@@ -152,6 +166,71 @@ export function toContract(row: ContractRow): Contract {
       removed,
     }),
   };
+}
+
+// The agent answers Glass Box's challenges; only then does the human see the review.
+export async function answerChallenges(
+  reviewId: string,
+  userId: string,
+  answers: ChallengeAnswer[],
+) {
+  const admin = createAdminClient();
+  const { data: review, error } = await admin
+    .from("reviews")
+    .select("id, status, critique, answered_at")
+    .eq("id", reviewId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!review) throw new HttpError(404, "Review not found.");
+  if (review.status !== "pending")
+    throw new HttpError(409, `Review is already ${review.status}.`);
+  const challenges =
+    (review.critique as { challenges?: Challenge[] } | null)?.challenges ?? [];
+  const known = new Set(challenges.map((c) => c.id));
+  const valid = answers.filter((a) => known.has(a.id));
+  const missing = challenges
+    .filter((c) => !valid.some((a) => a.id === c.id))
+    .map((c) => c.id);
+  if (missing.length)
+    throw new HttpError(
+      400,
+      `Answer every challenge. Missing: ${missing.join(", ")}.`,
+    );
+  const { error: upErr } = await admin
+    .from("reviews")
+    .update({
+      challenge_answers: valid as unknown as Json,
+      answered_at: new Date().toISOString(),
+    })
+    .eq("id", reviewId);
+  if (upErr) throw upErr;
+}
+
+// What the agent's answers say about its real ranking: each challenge pits two priorities;
+// the one it "favors" wins. Mismatch = it favored a priority it ranked lower.
+export function revealedRanking(
+  priorities: string[],
+  challenges: Challenge[],
+  answers: ChallengeAnswer[],
+) {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const rank = (name: string) =>
+    priorities.findIndex((p) => norm(p) === norm(name));
+  const wins = new Map(priorities.map((p) => [p, 0]));
+  const mismatches: { challenge: string; favored: string; over: string }[] = [];
+  for (const a of answers) {
+    const c = challenges.find((x) => x.id === a.id);
+    if (!c || c.tests.length < 2) continue;
+    const winner = c.tests.find((t) => norm(t) === norm(a.favors));
+    if (!winner) continue;
+    const loser = c.tests.find((t) => t !== winner)!;
+    if (wins.has(winner)) wins.set(winner, (wins.get(winner) ?? 0) + 1);
+    const [w, l] = [rank(winner), rank(loser)];
+    if (w !== -1 && l !== -1 && w > l)
+      mismatches.push({ challenge: c.id, favored: winner, over: loser });
+  }
+  return { mismatches, wins: Object.fromEntries(wins) };
 }
 
 export type ContractLookup =
