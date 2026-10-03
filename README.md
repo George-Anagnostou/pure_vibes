@@ -24,40 +24,83 @@ Run `npm run check`, `npm run format:check`, and `npm run build` before opening 
 
 ## Connect an agent to Glass Box
 
-Sign in at `<origin>/connect` (email magic link), mint an agent key (`gb_...`, shown once), and paste one of these. `<origin>` is the deployed app, e.g. `https://glassbox.cards`; the `/connect` page fills in the origin and key for you.
+1. Sign in at **https://pure-vibes-smoky.vercel.app/connect** (email sign-in link or code).
+2. Click **Create my key**. Your agent key (`gb_…`) is shown once and filled into every command on that page.
+3. Paste the command for your client. These are the same commands `/connect` shows; replace `gb_…` with your key.
 
-**Claude Code**
+The MCP endpoint is `https://pure-vibes-smoky.vercel.app/api/mcp/mcp` (streamable HTTP, `Authorization: Bearer gb_…`).
 
-```bash
-claude mcp add --transport http glassbox <origin>/api/mcp/mcp --header "Authorization: Bearer gb_YOUR_KEY"
-```
-
-**Claude Code + auto pop-up hooks (agent kit)**: no repo checkout needed.
+**Claude Code** (added for every project):
 
 ```bash
-curl -fsSL <origin>/api/agent-kit/install.mjs -o glassbox-install.mjs
-node glassbox-install.mjs . --key gb_YOUR_KEY --url <origin>
+claude mcp add --transport http --scope user glassbox https://pure-vibes-smoky.vercel.app/api/mcp/mcp --header "Authorization: Bearer gb_…"
 ```
 
-`--url` defaults to `$GLASSBOX_URL`, then the hosted app. The pop-up hook opens a Chrome app window on macOS, the default browser elsewhere, and over SSH/headless (or with `GLASSBOX_POPUP=off`) tells the agent to show you the link instead.
+Restart Claude Code and type `/mcp`; `glassbox` should say connected.
 
-**Cursor** (`.cursor/mcp.json`) and **any MCP client** (streamable HTTP):
+**Codex**: save the key, then add the server.
+
+```bash
+echo 'export GLASSBOX_API_KEY=gb_…' >> ~/.zshrc && export GLASSBOX_API_KEY=gb_…
+codex mcp add glassbox --url https://pure-vibes-smoky.vercel.app/api/mcp/mcp --bearer-token-env-var GLASSBOX_API_KEY
+```
+
+Open Codex in a new terminal and run `/mcp`. On bash, use `~/.bashrc`.
+
+**Claude Desktop** (Settings → Developer → Edit Config, `claude_desktop_config.json`; needs Node.js):
 
 ```json
 {
   "mcpServers": {
     "glassbox": {
-      "type": "http",
-      "url": "<origin>/api/mcp/mcp",
-      "headers": { "Authorization": "Bearer gb_YOUR_KEY" }
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://pure-vibes-smoky.vercel.app/api/mcp/mcp",
+        "--header",
+        "Authorization: Bearer gb_…"
+      ]
     }
   }
 }
 ```
 
-Clients that cannot set headers can use `<origin>/api/mcp/mcp?key=gb_YOUR_KEY`. That works, but URLs end up in logs and history, so prefer the header. CORS is open for browser clients such as MCP Inspector; requests without a valid key get `401` with a `WWW-Authenticate: Bearer` challenge.
+Quit and reopen Claude Desktop.
 
-**REST API**: `POST <origin>/api/review` (same fields as the `align` tool) returns `review_id` + `align_url`; poll `GET <origin>/api/reviews/<review_id>/contract`. Both take `Authorization: Bearer gb_...`.
+**Cursor** (`.cursor/mcp.json` or Settings → MCP) and most other MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "glassbox": {
+      "url": "https://pure-vibes-smoky.vercel.app/api/mcp/mcp",
+      "headers": { "Authorization": "Bearer gb_…" }
+    }
+  }
+}
+```
+
+Clients that only take a URL can use `https://pure-vibes-smoky.vercel.app/api/mcp/mcp?key=gb_…`. The key ends up in logs and history that way, so prefer the header. Requests without a valid key get `401` with a `WWW-Authenticate: Bearer` challenge.
+
+**Optional: pop-up window for Claude Code.** On `/connect`, open "Optional: pop-up window for Claude Code" to get a one-time install command (it works once and expires after a few minutes), then run it in your project folder:
+
+```bash
+curl -fsSL https://pure-vibes-smoky.vercel.app/i/<CODE> | sh
+```
+
+It installs the agent kit: the MCP server, hooks that open the Glass Box pop-up whenever Claude Code checks in (Chrome app window on macOS, default browser elsewhere; over SSH/headless or with `GLASSBOX_POPUP=off` the agent shows you the link instead), and project instructions to check in before acting. Restart Claude Code in that folder and type `/mcp`.
+
+**REST API**: `POST https://pure-vibes-smoky.vercel.app/api/review` (same fields as the MCP `align` tool) returns `review_id` and `align_url`; poll `GET https://pure-vibes-smoky.vercel.app/api/reviews/<review_id>/contract` until the human approves. Both take `Authorization: Bearer gb_…`.
+
+```bash
+curl -X POST https://pure-vibes-smoky.vercel.app/api/review \
+  -H "Authorization: Bearer gb_…" -H "Content-Type: application/json" \
+  -d @approach.json
+
+curl https://pure-vibes-smoky.vercel.app/api/reviews/REVIEW_ID/contract \
+  -H "Authorization: Bearer gb_…"
+```
 
 Check an endpoint end to end (health, 401, CORS, tools/prompts, `get_contract` error):
 

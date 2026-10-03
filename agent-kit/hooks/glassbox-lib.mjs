@@ -3,9 +3,9 @@
 //   GLASSBOX_URL        e.g. https://glassbox.cards
 //   GLASSBOX_AGENT_KEY  gb_... minted on the Glass Box dashboard
 
-export const base = (
-  process.env.GLASSBOX_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
+export const base =
+  // Same default as install.mjs (the hosted app); the installer always sets GLASSBOX_URL.
+  (process.env.GLASSBOX_URL ?? "https://glassbox.cards").replace(/\/$/, "");
 const key = process.env.GLASSBOX_AGENT_KEY;
 
 export async function readStdin() {
