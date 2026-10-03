@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { planGuidance } from "@/lib/glassbox/llm";
 import {
@@ -35,6 +36,8 @@ export async function POST(
     assertSameOrigin(request);
     const { supabase, user } = await requireUser();
     const { id } = await params;
+    if (!z.uuid().safeParse(id).success)
+      throw new HttpError(404, "Review not found.");
     const approval = await readJson(request, ApprovalSchema);
     // Decisions (current pop-up) or a plain ranking (older clients).
     const ranked = approval.ranked_priorities ?? [];
@@ -98,7 +101,11 @@ export async function POST(
         p_decisions: (resolved.decisions ?? []) as Json,
       },
     );
-    if (rpcError) throw new HttpError(409, rpcError.message);
+    // P0002 = not this user's review, or already decided. Never echo other DB errors.
+    if (rpcError)
+      throw rpcError.code === "P0002"
+        ? new HttpError(409, "Review not found or already decided.")
+        : rpcError;
     // Challenge rulings ride alongside the contract the RPC just created for this
     // (verified-owner) review; contracts aren't writable by the session client.
     if (approval.challenges?.length) {

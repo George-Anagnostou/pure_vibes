@@ -31,6 +31,33 @@ export type ReviewResult = {
 
 export const alignUrl = (reviewId: string) => `${appUrl()}/align/${reviewId}`;
 
+// Each align runs two model calls, so cap reviews per user (all of their agent
+// keys together) per rolling hour. Counted before any model call. Not atomic:
+// a burst of concurrent calls can overshoot by a few, which is acceptable here.
+const DEFAULT_ALIGN_LIMIT_PER_HOUR = 30;
+export function alignLimitPerHour() {
+  const n = Number.parseInt(
+    process.env.GLASSBOX_ALIGN_LIMIT_PER_HOUR ?? "",
+    10,
+  );
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_ALIGN_LIMIT_PER_HOUR;
+}
+
+async function assertAlignAllowance(userId: string) {
+  const limit = alignLimitPerHour();
+  const { count, error } = await createAdminClient()
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  if (error) throw error;
+  if ((count ?? 0) >= limit)
+    throw new HttpError(
+      429,
+      `Glass Box align limit reached (${limit} per hour). Keep working from your current contract (get_contract) or try again later.`,
+    );
+}
+
 export async function createReview(input: {
   userId: string;
   agentName: string;
@@ -40,6 +67,7 @@ export async function createReview(input: {
   priorities?: StatedPriority[]; // what it's weighing, highest first
   decisions?: Decision[];
 }): Promise<ReviewResult> {
+  await assertAlignAllowance(input.userId);
   const decisions = input.decisions ?? [];
   const priorities = input.priorities ?? [];
   const { revealed, critique } = await revealAndCritique({
