@@ -48,9 +48,27 @@ export function claudeCodeCommand(origin: string, key: string) {
   return `claude mcp add --transport http glassbox ${origin}/api/mcp/mcp --header "Authorization: Bearer ${key}"`;
 }
 
+// One block the human pastes into their agent's chat; the agent runs the kit
+// installer itself (MCP server + hooks + CLAUDE.md), then asks for a restart.
+export function agentPrompt(origin: string, key: string) {
+  return `Connect this project to Glass Box so you check your plan with me before you act. From the project root, run:
+
+curl -fsSL ${origin}/api/agent-kit/install.mjs -o glassbox-install.mjs
+node glassbox-install.mjs . --key ${key} --url ${origin}
+rm glassbox-install.mjs
+
+Then tell me to restart Claude Code in this folder and approve the "glassbox" MCP server if asked. After the restart, run /mcp to confirm glassbox is connected.`;
+}
+
 export function setupSnippets(origin: string, key: string) {
   const mcpUrl = `${origin}/api/mcp/mcp`;
   return [
+    {
+      id: "paste",
+      title: "Easiest: paste this into your agent",
+      hint: "Paste into Claude Code in your project. It installs Glass Box for you (MCP server, auto pop-up, and instructions to check in before acting).",
+      code: agentPrompt(origin, key),
+    },
     {
       id: "claude",
       title: "Claude Code",
@@ -185,8 +203,8 @@ export function ConnectAgent() {
   return (
     <div>
       <p className="text-sm text-ink-soft">
-        Mint a key, then run the command where your agent lives. The key is
-        shown once. Cursor, other MCP clients and the REST API are on{" "}
+        Mint a key, then paste the block into your agent. The key is shown once.
+        Cursor, other MCP clients and the REST API are on{" "}
         <Link href="/connect" className="font-semibold underline">
           Connect
         </Link>
@@ -197,9 +215,7 @@ export function ConnectAgent() {
       </div>
       {state.kind === "done" && (
         <div className="mt-3">
-          <CopyBlock
-            code={claudeCodeCommand(window.location.origin, state.key)}
-          />
+          <CopyBlock code={agentPrompt(window.location.origin, state.key)} />
         </div>
       )}
     </div>
