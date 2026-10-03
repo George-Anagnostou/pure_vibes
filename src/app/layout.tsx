@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Pure Vibes · Starter",
+  title: "GlassBox",
   description:
-    "A TypeScript integration starter for the Pure Vibes hackathon team.",
+    "Make AI agent work visible, understandable, and easier for people to guide.",
 };
 
 export default function RootLayout({

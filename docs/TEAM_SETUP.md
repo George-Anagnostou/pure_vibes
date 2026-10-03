@@ -1,6 +1,6 @@
 # Team setup
 
-This is the shared foundation for George (`George-Anagnostou`), Kathryn (`kathryn-salad-studio`), and Nick (`ncentis`) building Glass Box. The scaffold is implemented; live account connections require the steps below. Use **one shared development project per service**, with each teammate using their own login. Keep real production data and payments separate when you launch.
+This is the shared foundation for George (`George-Anagnostou`), Kathryn (`kathryn-salad-studio`), and Nick (`ncentis`) building GlassBox. The integration foundation is implemented; the product's transparent agent-visualization experience is still in development. Use **one shared development project per service**, with each teammate using their own login. Keep real production data and payments separate when you launch.
 
 ## 1. Accounts and access
 
@@ -161,7 +161,7 @@ For a real launch, create separate production resources/keys, set Production env
 - Only Nick creates migrations and pushes to shared Supabase. Test locally, regenerate types, and commit migration/types together. Obtain explicit approval before shared DB changes.
 - Do not make untracked schema edits in the shared SQL editor. If necessary, immediately capture them as a migration.
 - Vercel Git integration deploys application code; it does **not** apply Supabase migrations. Apply backward-compatible migrations before deploying code that needs them.
-- Service invitations are developer access. Signing into this app creates a separate customer/user account; this starter does not yet implement shared customer workspaces.
+- Service invitations are developer access. Signing into this app creates a separate customer/user account; the current app does not yet implement shared customer workspaces.
 - On hackathon day (date to confirm), target a ~5:00pm PT finish: 4:00pm PT feature freeze (only demo-blocking fixes afterward), and 4:30pm PT freeze on `master` (nothing merges after).
 
 ## End-to-end acceptance checklist

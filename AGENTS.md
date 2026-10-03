@@ -1,4 +1,4 @@
-# Working on Glass Box
+# Working on GlassBox
 
 This runbook is for George, Kathryn, Nick, and their coding agents. Run commands from the repository root unless stated otherwise. Read `README.md` for product context, `docs/TEAM_SETUP.md` for account configuration, and `docs/ARCHITECTURE.md` for integration boundaries before changing integrations.
 
@@ -16,11 +16,11 @@ This runbook is for George, Kathryn, Nick, and their coding agents. Run commands
 
 Ask the owner before editing files assigned to another teammate. Keep PRs within one ownership area where possible; disclose cross-owner files in the PR title and get the affected owner's approval before merging.
 
-| Owner                            | Primary files                                                                                                                                                                                                                      |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Nick (`ncentis`)                 | `src/lib/glassbox/**` (LLM prompts, checkpoint rules, contract logic), `src/lib/glassbox/types.ts`, `src/app/api/review/**`, `src/app/api/reviews/**`, `src/app/api/mcp/**`, `scripts/**`, `fixtures/**`, `supabase/migrations/**` |
-| Kathryn (`kathryn-salad-studio`) | `src/app/approve/**`, `src/app/dashboard/**`, `src/app/profile/**`, `src/components/**`, `src/app/globals.css`, `public/**`                                                                                                        |
-| George (`George-Anagnostou`)     | Authentication, Stripe, CI, deploy/Vercel configuration, `package.json`, `AGENTS.md`, and `docs/**`                                                                                                                                |
+| Owner                            | Primary files / area                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Nick (`ncentis`)                 | Product direction and `PRODUCT.md`; `src/lib/glassbox/**` (agent reasoning/checkpoints/contracts), `src/lib/glassbox/types.ts`, review/MCP API routes, `scripts/**`, `fixtures/**`, `supabase/migrations/**` |
+| Kathryn (`kathryn-salad-studio`) | UI: `src/app/approve/**`, `src/app/dashboard/**`, `src/app/profile/**`, `src/app/page.tsx`, `src/app/layout.tsx`, `src/components/**`, `src/app/globals.css`, `public/**`                                    |
+| George (`George-Anagnostou`)     | Infrastructure/backend: auth, Stripe, Supabase client integration, CI/deploy/Vercel configuration, `src/proxy.ts`, `src/lib/env.ts`, `src/lib/http.ts`, `package.json`, `AGENTS.md`, and `docs/**`           |
 
 `src/lib/glassbox/types.ts` is the shared API contract consumed by the UI and is owned by Nick. Ask Nick before changing it. After 3:00pm PT on hackathon day, changes must be additive; do not rename or remove contract fields.
 
@@ -77,7 +77,7 @@ For nvm installation, follow https://github.com/nvm-sh/nvm#installing-and-updati
    If the base repo is already cloned, reuse it and create a uniquely named worktree beside it; do not clone inside another checkout. Choose your team owner prefix and a unique task name. If using Node 24 directly, skip the nvm commands. Install dependencies and create `.env.local` separately in each worktree as needed (`node_modules` and env files are not shared).
 
 3. Populate `.env.local` from the team vault and your own development credentials. `npm run setup` copies `.env.example` without overwriting an existing file. Never print or paste the env file into agent output.
-4. Run `npm run env:check`, `npm run check`, then `npm run dev`. Open `http://localhost:3000`. The starter page and code checks work without cloud keys; live integration actions require configuration.
+4. Run `npm run env:check`, `npm run check`, then `npm run dev`. Open `http://localhost:3000`. The developer console and code checks work without cloud keys; live integration actions require configuration.
 5. Complete the relevant integration setup below and the acceptance checklist in `docs/TEAM_SETUP.md`.
 
 ### Environment ownership
@@ -153,13 +153,13 @@ stripe login
 npm run stripe:listen
 ```
 
-Set the printed signing secret locally and restart the app. Configure the recurring test price and customer portal in the same sandbox. Use the starter page's subscription and billing buttons to exercise `src/app/api/billing/*`.
+Set the printed signing secret locally and restart the app. Configure the recurring test price and customer portal in the same sandbox. Use the developer console's subscription and billing buttons to exercise `src/app/api/billing/*`.
 
 The hosted destination is `/api/stripe/webhook`, subscribed to `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. Use its separate secret on Vercel. Multiple teammates can run listeners; duplicate events are handled by the event ledger. Test Checkout with card `4242 4242 4242 4242`, a future expiry, and a valid test CVC. Generic `stripe trigger` customers are not mapped to app users, so those fixtures alone do not prove billing synchronization.
 
 ### AI: model calls and workflows
 
-The app uses `ai` + `@ai-sdk/openai`, not a separate OpenAI CLI. Configure API billing and `OPENAI_API_KEY`, then sign in and run a brief through the starter page. Implementation: `src/lib/ai/workflow.ts`; authenticated execution/history: `src/app/api/workflows/route.ts`.
+The app uses `ai` + `@ai-sdk/openai`, not a separate OpenAI CLI. Configure API billing and `OPENAI_API_KEY`, then sign in and run a brief through the developer console. Implementation: `src/lib/ai/workflow.ts`; authenticated execution/history: `src/app/api/workflows/route.ts`.
 
 The example normalizes a brief, generates a Zod-validated plan, and saves it in Supabase. It permits 10 attempts/user/hour and has request/token limits. Changing providers requires updating the model adapter, dependency, env example/checker, and docs. A coding-agent subscription or its MCP connection does not automatically supply the app's model API key.
 
@@ -254,7 +254,7 @@ Inspect review and CI results with:
 ```bash
 gh pr view PR_NUMBER --repo George-Anagnostou/pure_vibes --web
 gh pr checks PR_NUMBER --repo George-Anagnostou/pure_vibes
-gh run list --repo George-Anagnostou/pure_vibes --branch feat/short-description
+gh run list --repo George-Anagnostou/pure_vibes --branch george/short-description
 gh run view RUN_ID --repo George-Anagnostou/pure_vibes --log-failed
 ```
 
