@@ -50,8 +50,19 @@ In **Authentication → URL Configuration**:
 - Allow `https://YOUR-APP.vercel.app/auth/callback`.
 - Add exact additional development origins as needed; keep them aligned with `APP_URL`.
 
-Enable the Email provider and configure a custom SMTP sender first. The current
-free project/default sender rejects template changes and restricts recipients.
+The hosted project uses Resend SMTP with the verified `auth.glassbox.cards`
+sending domain. Sender: `Glass Box <signin@auth.glassbox.cards>`; host:
+`smtp.resend.com`; port: `465`; username: `resend`. Its password is a
+domain-scoped Resend sending key stored in Supabase Auth, never in this repo.
+Resend is provisioned through the existing Vercel project on its Free plan.
+The app origin is `https://glassbox.cards`; `auth.glassbox.cards` is the email
+sending subdomain. Supabase Site URL and the production `APP_URL` use the app
+origin; allow `https://glassbox.cards/auth/callback` as a redirect. Existing
+Vercel and localhost callbacks remain allowed for in-flight links/development.
+Production page requests on Vercel aliases redirect to the canonical app origin.
+
+For another Supabase project, enable Email auth and configure custom SMTP first.
+The default hosted sender restricts recipients and may reject template changes.
 In **Authentication → Email Templates**, set both
 **Magic Link** and **Confirm signup** to the HTML in
 `supabase/templates/magic-link.html` and `supabase/templates/confirmation.html`.
