@@ -22,12 +22,12 @@ type Phase =
 
 const HINT: Record<Exclude<Suggestion["action"], "add">, string> = {
   drop: "Maybe drop",
-  raise: "Maybe higher",
-  lower: "Maybe lower",
+  raise: "Maybe earlier",
+  lower: "Maybe later",
 };
 
-// Agent priorities start ranked (with Glass Box's nudges as hints); "add"
-// suggestions start in the "also consider" column.
+// The agent's steps start in the plan (with Glass Box's nudges as hints); its
+// suggested new steps start in the "also consider" column.
 function initialBoard(review: AlignReview): Board {
   const suggestions = readSuggestions(review.critique);
   const ranked: BoardItem[] = readStated(review.stated).map((p) => {
@@ -38,6 +38,10 @@ function initialBoard(review: AlignReview): Board {
       id: `agent:${p.name}`,
       name: p.name,
       detail: p.why || undefined,
+      how: p.how,
+      uses: p.uses,
+      estTokens: p.estTokens,
+      estCostUsd: p.estCostUsd,
       source: p.source,
       origin: "agent",
       hint:
@@ -84,6 +88,34 @@ export function AlignPanel({
   onDone?: () => void;
 }) {
   const [board, setBoard] = useState<Board>(() => initialBoard(review));
+  const [deleted, setDeleted] = useState<BoardItem[]>([]);
+
+  function deleteItem(item: BoardItem) {
+    setBoard((b) => ({
+      ranked: b.ranked.filter((i) => i.id !== item.id),
+      pool: b.pool.filter((i) => i.id !== item.id),
+    }));
+    if (item.origin === "agent") setDeleted((d) => [...d, item]);
+  }
+
+  function addItem(name: string) {
+    setBoard((b) =>
+      [...b.ranked, ...b.pool].some((i) => samePriority(i.name, name))
+        ? b
+        : {
+            ...b,
+            ranked: [
+              ...b.ranked,
+              {
+                id: `human:${name}:${Date.now()}`,
+                name,
+                source: "You",
+                origin: "human",
+              },
+            ],
+          },
+    );
+  }
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [error, setError] = useState("");
 
@@ -98,9 +130,9 @@ export function AlignPanel({
       await post(`/api/reviews/${review.id}/approve`, {
         ranked_priorities: board.ranked.map((i) => i.name),
         added_by_human: board.ranked
-          .filter((i) => i.origin === "suggested")
+          .filter((i) => i.origin !== "agent")
           .map((i) => i.name),
-        removed_by_human: board.pool
+        removed_by_human: [...board.pool, ...deleted]
           .filter((i) => i.origin === "agent")
           .map((i) => i.name),
       });
@@ -131,13 +163,13 @@ export function AlignPanel({
             <div>
               <p className="text-2xl font-black tracking-tight">Sent.</p>
               <p className="mt-1 text-ink-soft">
-                {review.agent_name} will follow your order.
+                {review.agent_name} will follow this plan, in this order.
               </p>
             </div>
             <FinalList
               names={phase.ranked.map((i) => i.name)}
               added={phase.ranked
-                .filter((i) => i.origin === "suggested")
+                .filter((i) => i.origin !== "agent")
                 .map((i) => i.name)}
             />
           </>
@@ -200,11 +232,17 @@ export function AlignPanel({
           </details>
         )}
         <p id={`rank-${review.id}`} className="text-sm text-ink-soft">
-          Everything steering {review.agent_name}. Drag to rank, pull ideas in
-          from the right, or drag one out to drop it.
+          How {review.agent_name} plans to do it, with what each step pulls from
+          and costs. Drag to reorder, pull steps in from the right, ✕ to delete,
+          or type your own.
         </p>
         <div className="mt-3">
-          <PriorityBoard board={board} onChange={setBoard} />
+          <PriorityBoard
+            board={board}
+            onChange={setBoard}
+            onDelete={deleteItem}
+            onAdd={addItem}
+          />
         </div>
       </section>
 

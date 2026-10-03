@@ -10,9 +10,9 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
-  type CollisionDetection,
   type DragStartEvent,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
@@ -24,22 +24,39 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useId, useState } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 export type BoardItem = {
   id: string;
   name: string;
+  how?: string; // the method / data source, in the agent's words
+  uses?: string[]; // tools, APIs, data sources
+  estTokens?: number;
+  estCostUsd?: number;
   detail?: string; // agent's why, or Glass Box's reason for a suggestion
-  source?: string; // where it came from: "Your request", "Its rules", "Assumption"…
-  origin: "agent" | "suggested";
-  hint?: string; // Glass Box nudge on an agent priority, e.g. "Maybe drop"
+  source?: string; // "Your request", "Its judgment", "Assumption", "Glass Box"…
+  origin: "agent" | "suggested" | "human";
+  hint?: string; // Glass Box nudge on an agent step, e.g. "Maybe earlier: …"
 };
 
 export type Board = { ranked: BoardItem[]; pool: BoardItem[] };
 type Column = keyof Board;
 
-// Two columns, drag only: the ranking on the left, possible priorities on the
-// right. Drag a bar across to rank it (or to set it aside), and up/down to reorder.
+export const fmtTokens = (n: number) =>
+  n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : `${n}`;
+export const fmtUsd = (n: number) =>
+  n === 0 ? "$0" : n < 0.01 ? "<$0.01" : `$${n.toFixed(n < 10 ? 2 : 0)}`;
+
+export function totals(items: BoardItem[]) {
+  return items.reduce(
+    (t, i) => ({
+      tokens: t.tokens + (i.estTokens ?? 0),
+      usd: t.usd + (i.estCostUsd ?? 0),
+      unknown: t.unknown + (i.estTokens === undefined ? 1 : 0),
+    }),
+    { tokens: 0, usd: 0, unknown: 0 },
+  );
+}
 
 // Whatever is under the pointer wins (so a drop lands exactly where released);
 // keyboard drags and gaps between bars fall back to the nearest bar.
@@ -49,12 +66,20 @@ const collision: CollisionDetection = (args) => {
   const bars = hits.filter((h) => h.id !== "ranked" && h.id !== "pool");
   return bars.length ? bars : hits;
 };
+
+// The plan as two columns: the steps the agent will do (in order) on the left,
+// steps to consider on the right. Drag to reorder or move across, ✕ to delete,
+// and type to add your own step or instruction.
 export function PriorityBoard({
   board,
   onChange,
+  onDelete,
+  onAdd,
 }: {
   board: Board;
   onChange: (board: Board) => void;
+  onDelete: (item: BoardItem) => void;
+  onAdd: (name: string) => void;
 }) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
@@ -80,7 +105,6 @@ export function PriorityBoard({
     const from = columnOf(active.id);
     const to = columnOf(over.id);
     if (!from || !to || from === to) return;
-    if (from === "ranked" && board.ranked.length <= 1) return; // keep one
     const item = board[from].find((i) => i.id === active.id)!;
     const overIndex = board[to].findIndex((i) => i.id === over.id);
     const dragged = active.rect.current.translated;
@@ -119,17 +143,18 @@ export function PriorityBoard({
       <div className="grid grid-cols-[3fr_2fr] gap-2">
         <ColumnShell
           id="ranked"
-          title="Its priorities"
-          note={`${board.ranked.length}`}
+          title="The plan"
           items={board.ranked}
-          empty="Drag a priority here"
+          empty="Drag a step here"
+          onDelete={onDelete}
+          footer={<AddStep onAdd={onAdd} />}
         />
         <ColumnShell
           id="pool"
           title="Also consider"
-          note={board.pool.length ? `${board.pool.length}` : ""}
           items={board.pool}
-          empty="Drag one here to set it aside"
+          empty="Drag a step here to set it aside"
+          onDelete={onDelete}
         />
       </div>
       <DragOverlay>
@@ -152,25 +177,32 @@ export function PriorityBoard({
 function ColumnShell({
   id,
   title,
-  note,
   items,
   empty,
+  onDelete,
+  footer,
 }: {
   id: Column;
   title: string;
-  note: string;
   items: BoardItem[];
   empty: string;
+  onDelete: (item: BoardItem) => void;
+  footer?: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const pool = id === "pool";
+  const t = totals(items);
   return (
     <section aria-label={title} className="min-w-0">
       <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5">
         <h3 className="text-xs font-bold tracking-wide text-ink-soft uppercase">
           {title}
         </h3>
-        <span className="text-[11px] text-ink-soft/80">{note}</span>
+        {items.length > 0 && (
+          <span className="text-[10px] text-ink-soft/80 tabular-nums">
+            {items.length} · ~{fmtTokens(t.tokens)} tok · {fmtUsd(t.usd)}
+          </span>
+        )}
       </div>
       <SortableContext
         id={id}
@@ -188,6 +220,7 @@ function ColumnShell({
               key={item.id}
               item={item}
               rank={pool ? undefined : index + 1}
+              onDelete={() => onDelete(item)}
             />
           ))}
           {items.length === 0 && (
@@ -197,11 +230,51 @@ function ColumnShell({
           )}
         </ol>
       </SortableContext>
+      {footer}
     </section>
   );
 }
 
-function SortableBar({ item, rank }: { item: BoardItem; rank?: number }) {
+function AddStep({ onAdd }: { onAdd: (name: string) => void }) {
+  const [text, setText] = useState("");
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const name = text.trim();
+    if (!name) return;
+    onAdd(name);
+    setText("");
+  }
+  return (
+    <form onSubmit={submit} className="mt-1.5 flex gap-1 px-1">
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={120}
+        placeholder="+ Add a step or instruction"
+        aria-label="Add a step or instruction"
+        className="min-w-0 flex-1 rounded-lg border border-dashed border-line bg-card px-2 py-1.5 text-[12px] placeholder:text-ink-soft focus:border-ink focus:outline-none"
+      />
+      {text.trim() && (
+        <button
+          type="submit"
+          className="rounded-lg bg-ink px-2 text-[12px] font-bold text-white"
+        >
+          Add
+        </button>
+      )}
+    </form>
+  );
+}
+
+function SortableBar({
+  item,
+  rank,
+  onDelete,
+}: {
+  item: BoardItem;
+  rank?: number;
+  onDelete: () => void;
+}) {
   const {
     attributes,
     listeners,
@@ -214,21 +287,30 @@ function SortableBar({ item, rank }: { item: BoardItem; rank?: number }) {
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? "opacity-30" : ""}
+      className={`group relative ${isDragging ? "opacity-30" : ""}`}
       data-testid={rank ? "rank-item" : "pool-item"}
     >
-      <button
-        type="button"
+      <div
         {...attributes}
         {...listeners}
+        role="button"
         aria-label={
           rank
-            ? `${item.name}, ranked #${rank}. Drag to reorder or drag right to set aside.`
-            : `${item.name}, suggested. Drag left into your ranking.`
+            ? `Step ${rank}: ${item.name}. Drag to reorder or drag right to set aside.`
+            : `${item.name}, not in the plan. Drag left to add it.`
         }
-        className="block w-full cursor-grab touch-none text-left active:cursor-grabbing"
+        className="cursor-grab touch-none text-left active:cursor-grabbing"
       >
         <Bar item={item} rank={rank} />
+      </div>
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onDelete}
+        aria-label={`Delete ${item.name}`}
+        className="absolute top-1 right-1 grid size-5 place-items-center rounded text-sm leading-none text-ink-soft/70 hover:bg-stop-bg hover:text-stop"
+      >
+        ×
       </button>
     </li>
   );
@@ -239,6 +321,7 @@ const SOURCE_TONE: Record<string, string> = {
   "Its judgment": "bg-warn-bg text-warn",
   "Its rules": "bg-paper text-ink-soft",
   "Glass Box": "bg-go-bg text-go",
+  You: "bg-go-bg text-go",
 };
 
 function Bar({
@@ -251,10 +334,15 @@ function Bar({
   lifted?: boolean;
 }) {
   const ranked = rank !== undefined;
+  const tag = ranked && item.origin === "suggested" ? "Added" : item.source;
+  const est = [
+    item.estTokens !== undefined ? `~${fmtTokens(item.estTokens)} tok` : "",
+    item.estCostUsd !== undefined ? fmtUsd(item.estCostUsd) : "",
+  ].filter(Boolean);
   return (
     <span
-      title={[item.hint, item.detail].filter(Boolean).join("\n")}
-      className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 ${
+      title={[item.how, item.hint, item.detail].filter(Boolean).join("\n")}
+      className={`flex items-start gap-1.5 rounded-lg border py-1.5 pr-6 pl-2 ${
         lifted
           ? "border-ink bg-card shadow-xl"
           : ranked
@@ -263,7 +351,6 @@ function Bar({
       }`}
     >
       <span
-        aria-hidden={!ranked}
         className={`mt-px grid size-4.5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
           ranked
             ? "bg-paper text-ink"
@@ -277,24 +364,46 @@ function Bar({
           <span className="text-[13px] leading-tight font-semibold break-words">
             {item.name}
           </span>
-          {item.source && (
+          {tag && (
             <span
               className={`rounded px-1 py-px text-[9px] leading-tight font-semibold uppercase ${
-                ranked && item.origin === "suggested"
+                tag === "Added"
                   ? "bg-go-bg text-go"
-                  : (SOURCE_TONE[item.source] ?? "bg-paper text-ink-soft")
+                  : (SOURCE_TONE[tag] ?? "bg-paper text-ink-soft")
               }`}
             >
-              {ranked && item.origin === "suggested" ? "Added" : item.source}
+              {tag}
             </span>
           )}
         </span>
+        {item.how && (
+          <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-ink">
+            {item.how}
+          </span>
+        )}
+        {(item.uses?.length || est.length > 0) && (
+          <span className="mt-1 flex flex-wrap gap-1">
+            {item.uses?.slice(0, 4).map((u) => (
+              <span
+                key={u}
+                className="rounded bg-paper px-1 py-px text-[9.5px] text-ink-soft"
+              >
+                {u}
+              </span>
+            ))}
+            {est.length > 0 && (
+              <span className="rounded bg-brand/10 px-1 py-px text-[9.5px] font-semibold text-brand tabular-nums">
+                {est.join(" · ")}
+              </span>
+            )}
+          </span>
+        )}
         {item.hint && (
           <span className="mt-0.5 line-clamp-1 text-[10.5px] leading-snug font-semibold text-warn">
             {item.hint}
           </span>
         )}
-        {item.detail && (
+        {!item.how && item.detail && (
           <span className="line-clamp-1 text-[10.5px] leading-snug text-ink-soft">
             {item.detail}
           </span>

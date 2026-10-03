@@ -11,7 +11,18 @@ export const SOURCE_LABEL: Record<string, string> = {
   assumption: "Assumption",
 };
 
-export type StatedPriority = { name: string; why: string; source?: string };
+export type StatedPriority = {
+  name: string;
+  why: string;
+  source?: string;
+  how?: string;
+  uses?: string[];
+  estTokens?: number;
+  estCostUsd?: number;
+};
+
+const num = (v: Json | undefined) =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
 export type SuggestionAction = "add" | "drop" | "raise" | "lower";
 export type Suggestion = {
   action: SuggestionAction;
@@ -49,6 +60,10 @@ export function readStated(value: Json | undefined): StatedPriority[] {
               name: str(entry.name),
               why: str(entry.why),
               source: SOURCE_LABEL[str(entry.source)],
+              how: str(entry.how) || undefined,
+              uses: readStrings(entry.uses),
+              estTokens: num(entry.est_tokens),
+              estCostUsd: num(entry.est_cost_usd),
             }
           : null;
     if (item?.name && !out.some((o) => samePriority(o.name, item.name)))
