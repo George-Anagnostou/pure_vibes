@@ -9,6 +9,7 @@ import type {
   Revealed,
   ReviewStatus,
   StatedPriority,
+  ApprovedStep,
 } from "@/lib/glassbox/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContractRow, Json } from "@/types/database";
@@ -62,7 +63,7 @@ export async function createReview(input: {
 }
 
 export const CONTRACT_INSTRUCTIONS =
-  "Treat this priority order as binding: when priorities conflict, the higher one wins. Do not optimize for anything in removed_by_human. Follow plan_guidance. If your plan changes materially, call align again. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
+  "This plan is binding. Do the approved_steps in this order, the way each one describes; human-added steps are required. Never do anything in removed_by_human, and don't add steps or data sources the human didn't approve. Follow plan_guidance. If you need to change your approach, call align again. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
 
 // Names of the agent's stated priorities; older rows stored plain strings.
 export function statedNames(stated: unknown): string[] {
@@ -95,13 +96,41 @@ export function describeChanges(
   }
   const moves = parts.length
     ? `Human ${parts.join(" and ")}`
-    : "Human kept your priority order";
+    : "Human kept your step order";
   return `${moves}${added.length ? `; added ${added.join(", ")}` : ""}${removed.length ? `; dropped ${removed.join(", ")}` : ""}.`;
+}
+
+// The approved names, resolved back to the agent's own step details where they exist.
+export function approvedSteps(
+  ranked: string[],
+  agentSteps: unknown,
+  added: string[],
+): ApprovedStep[] {
+  const norm = (s: string) => s.trim().toLowerCase();
+  const steps = Array.isArray(agentSteps)
+    ? (agentSteps.filter((p) => p && typeof p === "object") as StatedPriority[])
+    : [];
+  return ranked.map((name, i) => {
+    const s = steps.find((p) => norm(p.name) === norm(name));
+    const human = added.some((a) => norm(a) === norm(name)) || !s;
+    return {
+      step: i + 1,
+      name,
+      ...(s?.how ? { how: s.how } : {}),
+      ...(s?.uses?.length ? { uses: s.uses } : {}),
+      ...(s?.est_tokens !== undefined ? { est_tokens: s.est_tokens } : {}),
+      ...(s?.est_cost_usd !== undefined
+        ? { est_cost_usd: s.est_cost_usd }
+        : {}),
+      ...(human ? { added_by_human: true as const } : {}),
+    };
+  });
 }
 
 export function toContract(
   row: ContractRow,
   agentOrder: string[] = [],
+  agentSteps: unknown = [],
 ): Contract {
   const hardLines = row.hard_lines as Record<string, boolean>;
   const ranked = row.ranked_priorities as string[];
@@ -114,6 +143,7 @@ export function toContract(
     );
   return {
     review_id: row.review_id,
+    approved_steps: approvedSteps(ranked, agentSteps, added),
     ranked_priorities: ranked,
     dials: row.dials as Dials,
     hard_lines: lines,
@@ -157,7 +187,7 @@ export async function getContract(
   if (cErr) throw cErr;
   return {
     status: "approved",
-    contract: toContract(row, statedNames(review.stated)),
+    contract: toContract(row, statedNames(review.stated), review.stated),
   };
 }
 

@@ -193,14 +193,26 @@ export const CritiqueSchema = z.object({
 export type Critique = z.infer<typeof CritiqueSchema>;
 
 // ---- Contract (returned to the agent after human approval) ----
+// One step of the approved plan, as the agent must now carry it out.
+export type ApprovedStep = {
+  step: number;
+  name: string;
+  how?: string;
+  uses?: string[];
+  est_tokens?: number;
+  est_cost_usd?: number;
+  added_by_human?: true; // typed in by the human or accepted from a Glass Box suggestion
+};
+
 export type Contract = {
   review_id: string;
-  ranked_priorities: string[];
+  approved_steps: ApprovedStep[]; // the binding plan, in the human's order
+  ranked_priorities: string[]; // the same step names, kept for older agents
   dials: Dials;
   hard_lines: string[]; // e.g. ["no_unauthorized_access", "budget_max_cents:2000"]
   budget_cents: number;
-  added_by_human: string[]; // priorities the human added that the agent never considered
-  removed_by_human: string[]; // agent priorities the human dropped
+  added_by_human: string[]; // steps the human added
+  removed_by_human: string[]; // agent steps the human deleted
   plan_guidance: string;
   instructions: string;
   message: string;

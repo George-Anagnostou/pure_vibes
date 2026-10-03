@@ -28,7 +28,7 @@ describe("describeChanges", () => {
       ),
     ).toBe("Human moved Honesty to #1; added Honesty; dropped Get the answer.");
     expect(describeChanges(["Scale", "Cost"], ["scale", "cost"], [])).toBe(
-      "Human kept your priority order.",
+      "Human kept your step order.",
     );
   });
 });

@@ -68,14 +68,14 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Glass Box interview: open up your black box to the human before you act. Call this BEFORE acting on any task with real choices or consequences (booking, buying, building, contacting, deploying), and again whenever your approach changes. List EVERYTHING that is steering you, highest weight first, aiming for 8-15 priorities: goals from the request; the human's instructions, memory and project files (e.g. CLAUDE.md); your system prompt, built-in guidelines and safety rules that apply here; your own defaults and habits (e.g. 'prefer well-known tools', 'finish in one pass'); and assumptions you made without being told (e.g. 'Leave today', 'Economy class'). Give each a one-line honest why and its source. Put your current thinking and plan in `plan`. A pop-up opens for the human, who re-ranks your priorities; you then get their binding priority contract from get_contract. Follow it: its ranked_priorities and plan_guidance win over your own, never optimize for anything in removed_by_human, and call `checkpoint` before each consequential action.";
+  "Glass Box planning interview: show the human HOW you will do the task before you do it, like a brief planning mode. Call this BEFORE acting on any task with real choices, data, cost or consequences, and again whenever your approach changes. Break your approach into 5-15 concrete steps in the order you'd do them. For each step say exactly HOW: the method, the data sources/APIs/sites/libraries you'd pull from, the tools you'd use (WebFetch, Bash, file edits…), your honest estimate of model tokens and dollars (tokens plus any paid APIs), why you'd do it this way, and its source (request / instructions / rules / judgment / assumption). Don't describe the output; describe the how. A pop-up opens for the human, who reorders, deletes and adds steps. Then call get_contract: it returns the approved_steps in the human's order. That approved plan is binding: do only those steps, in that order, the way described; never do anything in removed_by_human; treat human-added steps as required; call `checkpoint` before each consequential action.";
 
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
       "align",
       {
-        title: "Align priorities with the human (Glass Box)",
+        title: "Show the human how you'll do it (Glass Box)",
         description: ALIGN_DESCRIPTION,
         inputSchema: z.object({
           task: z
@@ -84,23 +84,23 @@ const handler = createMcpHandler(
             .min(1)
             .max(4000)
             .describe("What the human asked you to do, in their words"),
-          priorities: z
+          steps: z
             .array(StatedPrioritySchema)
             .min(1)
             .max(20)
             .describe(
-              "Everything steering you, highest weight first (aim for 8-15): request goals, the human's instructions, your rules/guidelines, your own defaults, your assumptions",
+              "Your approach as 5-15 concrete steps, in order, each with how / uses / est_tokens / est_cost_usd / why / source",
             ),
           plan: z
             .string()
             .trim()
             .max(12000)
             .optional()
-            .describe("Your current thinking and step-by-step plan"),
+            .describe("Optional: your overall thinking in a few sentences"),
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },
-      async ({ task, priorities, plan, agent_name }, ctx) => {
+      async ({ task, steps, plan, agent_name }, ctx) => {
         const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
@@ -109,7 +109,7 @@ const handler = createMcpHandler(
             agentName: agent_name ?? agent.agentName,
             task,
             plan,
-            stated: priorities,
+            stated: steps,
           });
           const lookup = await waitForContract(
             review.review_id,
@@ -226,13 +226,13 @@ const handler = createMcpHandler(
       {
         title: "Realign with Glass Box",
         description:
-          "Ask the agent to send its current plan and priorities to Glass Box so you can re-rank them.",
+          "Ask the agent to show you how it plans to do the rest of the task, step by step, so you can reorder, delete or add steps.",
         argsSchema: z.object({
           focus: z
             .string()
             .optional()
             .describe(
-              "Optional: what you want the agent to reconsider (e.g. cost, security)",
+              "Optional: what you want the agent to reconsider (e.g. where it gets its data, cost)",
             ),
         }),
       },
@@ -242,14 +242,14 @@ const handler = createMcpHandler(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Pause and realign with me using Glass Box. Call the glassbox \`align\` tool with your current task, every priority you are optimizing for (highest first, each with an honest one-line why), and your remaining plan. Show me the align_url so I can re-rank. When the contract comes back, follow it and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+              text: `Pause and show me how you'll do the rest of this with Glass Box. Call the glassbox \`align\` tool with your task and your remaining approach as concrete steps (how, data sources and tools, estimated tokens and cost, why). When the approved plan comes back, follow it exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
             },
           },
         ],
       }),
     );
   },
-  { serverInfo: { name: "glass-box", version: "0.2.0" } },
+  { serverInfo: { name: "glass-box", version: "0.3.0" } },
 );
 
 const authed = withMcpAuth(

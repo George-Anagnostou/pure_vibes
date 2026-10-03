@@ -55,17 +55,23 @@ Estimate where the plan sits on each dial (0 = left label, 1 = right label):
 Estimate realistic monthly and one-time USD cost of running the plan as written.
 The headline is one plain-English sentence a non-engineer would understand.`;
 
-const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed and told us everything steering it (highest first, each with a reason and a source: request, instructions, rules = its built-in guidelines, judgment = its own defaults, assumption = something it assumed). An independent auditor also inferred what its plan actually optimizes for. The task can be anything: booking travel, buying something, writing code, research.
+const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed in planning mode and described HOW it will do the task: numbered steps, each with its method, the data sources/APIs/tools it uses, its token and dollar estimate, why, and a source (request, instructions, rules = its guidelines, judgment = its own default way, assumption = something it assumed). An independent auditor also inferred what the plan actually optimizes for. The task can be anything: research, data pulls, building software, booking, buying.
 
-1. suggestions (3-6, most important first) — what the human should change about the agent's priority list:
-   - "add": a priority the agent never considered that this person would plausibly care about, inferred from the task (e.g. Price when booking a flight, Data privacy when handling personal info, "Just for me" for a personal app).
-   - Look hard at "judgment" and "assumption" priorities: those are where agents quietly go wrong. Suggest dropping or lowering the ones this person likely wouldn't sign off on.
-   - "drop": an agent priority that likely doesn't matter to this person or is costing them (e.g. a specific Airline when any carrier would do).
-   - "raise" / "lower": an agent priority that is ranked too low / too high for what this person would want.
-   For drop/raise/lower, set "ref" to the item's number in the agent's numbered list and copy its name into "priority" (never use the auditor's revealed names). For add, ref = 0. Prefer reranking the agent's own items over inventing near-duplicates. Write "why" as one short, friendly sentence to the human, concrete to their task. Never suggest something already on the list.
-2. Flag any step that could cross a hard line: no_unauthorized_access (logging in without permission, guessing credentials, forging sessions, scraping behind auth), no_deception (misrepresenting work or identity), no_unapproved_contact (emailing/messaging people), budget_cap (spending meaningful money without asking). Severity "block" only for clear violations, "warn" for risky-but-ambiguous. Only real crossings. In the explanation name the priority that is overriding the hard line with its rank, e.g. "'Get the answer' (#1) is overriding 'No unauthorized access'". If a hard line is at risk, include an "add" or "raise" suggestion that addresses it.
-3. stated_vs_revealed: one line, "Agent says: <its top stated priorities>. Plan does: <the concrete steps> (<revealed top priority>)." Call out any mismatch.
-Verdict: red only with a block-severity risk; yellow if the agent's priorities clearly mismatch what this person would want; else green.
+Judge the HOW, not the output:
+- Data sources: is each source authoritative, current, licensed and allowed (official APIs and public datasets vs scraping, unofficial endpoints, paywalls, sites behind logins, made-up or "typical" numbers)? Is there a better or free source?
+- Methods: is the method sound for the decision the human will make? Missing validation, citations or cross-checks?
+- Cost: are token and dollar estimates plausible? Is any step expensive for what it adds, or is there a cheaper way (cached data, a smaller pull, no LLM call)?
+- Risk: steps that spend money, touch personal data, contact people, or are hard to undo.
+- Judgment and assumption steps are where agents quietly go wrong; question them.
+
+1. suggestions (3-6, most important first) — changes to the agent's step list:
+   - "add": a step the plan is missing (e.g. "Cite the source and date for every number", "Use the official CMS price files instead of a third-party site"). Put the method in "why".
+   - "drop": a step that is unnecessary, wasteful, risky or uses a bad source.
+   - "raise" / "lower": a step that should happen earlier (e.g. confirm requirements before pulling data) or later.
+   For drop/raise/lower, set "ref" to the step's number in the agent's numbered list and copy its name into "priority" (never use the auditor's revealed names). For add, ref = 0 and "priority" is a short new step title. Write "why" as one short, concrete sentence to the human. Never suggest a step already on the list.
+2. Flag any step that could cross a hard line: no_unauthorized_access (logging in without permission, guessing credentials, forging sessions, scraping behind auth), no_deception (misrepresenting work or identity), no_unapproved_contact (emailing/messaging people), budget_cap (spending meaningful money without asking). Severity "block" only for clear violations, "warn" for risky-but-ambiguous. Only real crossings. In the explanation name the step and its number, e.g. "Step 3 'Fetch answer key' crosses 'No unauthorized access'". If a hard line is at risk, include a suggestion that addresses it.
+3. stated_vs_revealed: one line, "Agent says: <its approach in brief>. Plan does: <what the steps actually optimize for> (<revealed top priority>)." Call out any mismatch.
+Verdict: red only with a block-severity risk; yellow if the approach clearly mismatches what this person would want (bad data sources, overspending, skipped validation); else green.
 Be concise and concrete.`;
 
 type Input = { task: string; plan?: string; stated?: StatedPriority[] };
@@ -73,12 +79,25 @@ type Input = { task: string; plan?: string; stated?: StatedPriority[] };
 const quote = ({ task, plan }: Input) =>
   `<task>\n${task}\n</task>\n\n<proposed_plan>\n${plan?.trim() || "(The agent gave no step-by-step plan; judge from the task and its priorities.)"}\n</proposed_plan>`;
 
+const fmtTokens = (n?: number) =>
+  n === undefined ? "?" : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
+
+// The agent's steps (or, for older rows, priorities) as a numbered list.
 const listStated = (stated: StatedPriority[] = []) =>
   stated.length
     ? stated
-        .map(
-          (p, i) =>
-            `${i + 1}. ${p.name}${p.source ? ` [${p.source}]` : ""}${p.why ? ` — ${p.why}` : ""}`,
+        .map((p, i) =>
+          [
+            `${i + 1}. ${p.name}${p.source ? ` [${p.source}]` : ""}`,
+            p.how ? `   how: ${p.how}` : "",
+            p.uses?.length ? `   uses: ${p.uses.join(", ")}` : "",
+            p.est_tokens !== undefined || p.est_cost_usd !== undefined
+              ? `   estimate: ~${fmtTokens(p.est_tokens)} tokens, $${p.est_cost_usd ?? "?"}`
+              : "",
+            p.why ? `   why: ${p.why}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
         )
         .join("\n")
     : "(none stated)";
@@ -104,10 +123,7 @@ export async function reveal({ task, plan, stated }: Input): Promise<Revealed> {
     const { output } = await generateText({
       model: m,
       system: REVEAL_SYSTEM,
-      // With no plan, the stated priorities are the only evidence; with a plan, judge the steps alone.
-      prompt: plan?.trim()
-        ? `${quote({ task, plan })}\n\nReveal what this proposed plan is really optimizing for.`
-        : `${quote({ task })}\n\nAGENT'S STATED PRIORITIES:\n${listStated(stated)}\n\nReveal what this agent is really optimizing for.`,
+      prompt: `${quote({ task, plan })}\n\nAGENT'S PLAN, STEP BY STEP:\n${listStated(stated)}\n\nReveal what this approach is really optimizing for, judging the steps and their methods.`,
       output: Output.object({
         schema: RevealSchema,
         name: "revealed_priorities",
@@ -178,7 +194,7 @@ export async function critique(
     const { output } = await generateText({
       model: m,
       system: CRITIQUE_SYSTEM,
-      prompt: `${quote({ task, plan })}\n\nAGENT'S STATED PRIORITIES (from interviewing it, highest first):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims; context only, do not use these names for drop/raise/lower):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
+      prompt: `${quote({ task, plan })}\n\nAGENT'S PLAN, STEP BY STEP (from interviewing it):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims; context only, do not use these names for drop/raise/lower):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
       output: Output.object({ schema: CritiqueSchema, name: "critique" }),
     });
     return {
@@ -276,8 +292,8 @@ export async function planGuidance(
         maxOutputTokens: 400,
         system:
           OVERSIGHT_ROLE +
-          "You tell an AI agent how to proceed now that the human has re-ranked its priorities. Output 2-4 short imperative sentences the agent must follow: what to do differently, what to drop, what to check with the human. Be concrete to the task. No preamble.",
-        prompt: `${quote({ task, plan })}\n\nHUMAN'S RANKED PRIORITIES (highest first):\n${approval.ranked_priorities.join(" > ")}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nDropped by the human: ${approval.removed_by_human.join(", ")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
+          "You tell an AI agent how to proceed now that the human has approved, reordered, deleted and added steps in its plan. Output 2-4 short imperative sentences the agent must follow: what to do differently (methods, data sources, cost), what not to do, what to check with the human. Be concrete to the task. No preamble.",
+        prompt: `${quote({ task, plan })}\n\nHUMAN-APPROVED STEPS (in order):\n${approval.ranked_priorities.map((p, i) => `${i + 1}. ${p}`).join("\n")}${approval.added_by_human?.length ? `\nSteps added by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nSteps deleted by the human: ${approval.removed_by_human.join(", ")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
       }),
     );
     return text.trim();
