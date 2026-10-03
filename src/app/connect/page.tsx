@@ -42,8 +42,8 @@ export default async function ConnectPage() {
     <main className="mx-auto max-w-2xl px-4 pt-6 pb-16">
       <h1 className="text-2xl font-black tracking-tight">Connect an agent</h1>
       <p className="mt-1 mb-6 text-ink-soft">
-        One button, one line to paste, and your agent will check its plan with
-        you before it acts.
+        Works with Claude Code, Codex, Cursor and any MCP client. One click, one
+        command, and your agent checks its plan with you before it acts.
       </p>
       <ConnectClient origin={appUrl()} keys={keys ?? []} />
     </main>
