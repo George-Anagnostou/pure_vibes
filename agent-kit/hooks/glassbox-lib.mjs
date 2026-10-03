@@ -1,11 +1,14 @@
 // Shared helpers for the Glass Box Claude Code hooks. No dependencies: Node 18+ only.
 // Config comes from the environment (set in .claude/settings.local.json "env"):
-//   GLASSBOX_URL        e.g. https://glassbox.cards
+//   GLASSBOX_URL        e.g. https://glass-box-app.vercel.app
 //   GLASSBOX_AGENT_KEY  gb_... minted on the Glass Box dashboard
 
 export const base =
-  // Same default as install.mjs (the hosted app); the installer always sets GLASSBOX_URL.
-  (process.env.GLASSBOX_URL ?? "https://glassbox.cards").replace(/\/$/, "");
+  // The hosted app (install.mjs sets GLASSBOX_URL explicitly; this is only a fallback).
+  (process.env.GLASSBOX_URL ?? "https://glass-box-app.vercel.app").replace(
+    /\/$/,
+    "",
+  );
 const key = process.env.GLASSBOX_AGENT_KEY;
 
 export async function readStdin() {

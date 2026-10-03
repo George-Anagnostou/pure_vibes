@@ -11,22 +11,30 @@ export function TopBar({ minimal = false }: { minimal?: boolean }) {
     <header className={styles.topBar}>
       <span className={styles.topBarSide}>
         {!minimal && (
-          <Link href="/profile" className={styles.topBarLink}>
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              aria-hidden
-            >
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="10" r="3.2" />
-              <path d="M5.5 19.2c1.6-3.1 4.3-4.2 6.5-4.2s4.9 1.1 6.5 4.2" />
-            </svg>
-            Profile : Account
-          </Link>
+          <>
+            <Link href="/profile" className={styles.topBarLink}>
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="10" r="3.2" />
+                <path d="M5.5 19.2c1.6-3.1 4.3-4.2 6.5-4.2s4.9 1.1 6.5 4.2" />
+              </svg>
+              Profile
+            </Link>
+            <span aria-hidden className={styles.topBarLink}>
+              &nbsp;:&nbsp;
+            </span>
+            <Link href="/account" className={styles.topBarLink}>
+              Account
+            </Link>
+          </>
         )}
       </span>
       <Link href="/" aria-label="Glass Box home">
