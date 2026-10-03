@@ -1,11 +1,10 @@
 <!-- glassbox -->
 
-## Glass Box: align before you act
+## Glass Box: check your priorities with the human
 
 This project is connected to Glass Box (MCP server `glassbox`). The human decides what matters; you follow it.
 
-- **Before executing any multi-step plan**, call `align` with the task, your full step-by-step plan, and your own honest ranked priorities (`its_priorities`). Do not start building first.
-- If `align` returns `status: "pending"`, show the human the `align_url` (run `open <align_url>` on macOS), wait for them, then call `get_contract`.
-- The returned **priority contract is binding**: when priorities conflict, the higher-ranked one wins. Follow `plan_guidance`, respect every hard line, and replan to match before writing code. Tell the human in one or two lines what changed from your original plan.
-- Call `checkpoint` before spending, deleting, contacting anyone, or accessing anything new. Never perform an action `checkpoint` blocks, and never route around a block. Call `request_spend` before spending money.
-- If the plan changes materially, call `align` again.
+- **Before acting on any task with real choices or consequences**, call `align` with the task, every priority you are optimizing for (highest first, each with an honest one-line `why`, including implicit ones), and your plan if you have one.
+- If it returns `status: "pending"`, show the human the `align_url` (run `open <align_url>` on macOS) and call `get_contract` until it is approved.
+- The returned **priority contract is binding**: its `ranked_priorities` and `plan_guidance` override your own; never optimize for anything in `removed_by_human`. Tell the human in one or two lines what you changed.
+- Call `checkpoint` before spending, deleting, contacting anyone, or accessing anything new, and never perform an action it blocks. If your approach changes, call `align` again.
