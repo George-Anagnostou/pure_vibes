@@ -22,7 +22,7 @@ async function api<T>(
   return data as T;
 }
 
-export function StarterConsole({
+export function DeveloperConsole({
   configured,
   email,
   billing,

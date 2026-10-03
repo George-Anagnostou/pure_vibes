@@ -24,7 +24,8 @@
     "db:push": "supabase db push",
     "db:types": "node scripts/db-types.mjs",
     "db:test": "supabase test db",
-    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook"
+    "stripe": "node --env-file-if-exists=.env.local scripts/stripe.mjs",
+    "stripe:listen": "npm run stripe -- listen --forward-to localhost:3000/api/stripe/webhook"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",
