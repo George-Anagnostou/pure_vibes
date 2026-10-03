@@ -106,6 +106,12 @@ export type StatedPriority = z.infer<typeof StatedPrioritySchema>;
 // ---- Suggestions: the only critique output the human sees ----
 export const SuggestionSchema = z.object({
   action: z.enum(["add", "drop", "raise", "lower"]),
+  ref: z
+    .number()
+    .int()
+    .describe(
+      "For drop/raise/lower: the number of the agent's priority in its numbered list (1 = first). For add: 0.",
+    ),
   priority: z
     .string()
     .describe(

@@ -57,23 +57,50 @@ describe("sanitizeSuggestions", async () => {
     );
   const stated = [
     { name: "Speed", why: "" },
+    { name: "Real, accurate data (no fabricated prices)", why: "" },
     { name: "Airline", why: "" },
   ];
+  const sg = (
+    action: "add" | "drop" | "raise" | "lower",
+    priority: string,
+    ref = 0,
+  ) => ({
+    action,
+    ref,
+    priority,
+    why: "",
+  });
+  const show = (out: { action: string; priority: string }[]) =>
+    out.map((s) => `${s.action} ${s.priority}`);
+
   it("drops suggestions that don't fit the agent's list", () => {
     const out = sanitizeSuggestions(
       [
-        { action: "add", priority: "Price", why: "" },
-        { action: "add", priority: "speed", why: "" },
-        { action: "raise", priority: "Speed", why: "" },
-        { action: "lower", priority: "Airline", why: "" },
-        { action: "drop", priority: "Airline", why: "" },
-        { action: "drop", priority: "Seat", why: "" },
-        { action: "add", priority: "Price", why: "" },
+        sg("add", "Price"),
+        sg("add", "speed"),
+        sg("raise", "Speed", 1),
+        sg("lower", "Airline", 3),
+        sg("drop", "Airline", 3),
+        sg("drop", "Seat"),
+        sg("add", "Price"),
       ],
       stated,
     );
-    expect(out.map((s) => `${s.action} ${s.priority}`)).toEqual([
-      "add Price",
+    expect(show(out)).toEqual(["add Price", "drop Airline"]);
+  });
+
+  it("resolves paraphrased names and numeric refs to the agent's exact name", () => {
+    const out = sanitizeSuggestions(
+      [
+        sg("raise", "Accuracy / no fabrication", 2),
+        sg("lower", "speed"),
+        sg("drop", "#3"),
+      ],
+      stated,
+    );
+    expect(show(out)).toEqual([
+      "raise Real, accurate data (no fabricated prices)",
+      "lower Speed",
       "drop Airline",
     ]);
   });
