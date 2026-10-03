@@ -26,7 +26,9 @@ export function SignInForm({
     setError("");
     setMessage("");
     if (Date.now() < retryAt) {
-      setError("Wait a minute before requesting another email.");
+      setError(
+        "We just sent you an email. Use the sign-in code in it, or wait a minute to request another.",
+      );
       return;
     }
     setBusy("send");
@@ -37,7 +39,15 @@ export function SignInForm({
         body: JSON.stringify({ email: email.trim(), next: nextPath }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Could not send an email.");
+      // Email limit reached: an earlier email's code may still work, so show the box.
+      if (res.status === 429) setShowCode(true);
+      if (!res.ok)
+        throw new Error(
+          body.error ??
+            (res.status === 429
+              ? "We've hit our email limit for now. Try again in a little while, or if you already got an email, use the sign-in code in it."
+              : "Could not send an email."),
+        );
       setSentTo(email.trim());
       setShowCode(true);
       setRetryAt(Date.now() + 60_000);
