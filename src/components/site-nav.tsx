@@ -17,6 +17,7 @@ export function SiteNav() {
           Glass Box
         </Link>
         <NavLink href="/inbox">Inbox</NavLink>
+        <NavLink href="/connect">Connect</NavLink>
         <NavLink href="/profile">Profile</NavLink>
       </nav>
     </header>

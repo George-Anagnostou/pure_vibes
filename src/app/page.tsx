@@ -70,12 +70,27 @@ export default async function Home({
             >
               Open your inbox
             </Link>
+            <Link
+              href="/connect"
+              className="mt-3 block rounded-xl border-2 border-ink px-5 py-3 text-center font-bold hover:bg-card"
+            >
+              Connect an agent
+            </Link>
             <p className="mt-3 text-center text-sm text-ink-soft">
               Signed in as {email} · <SignOutButton />
             </p>
           </>
         ) : (
-          <SignInForm />
+          <>
+            <SignInForm nextPath="/connect" />
+            <p className="mt-3 text-sm text-ink-soft">
+              New here? Sign in with your email, then{" "}
+              <Link href="/connect" className="font-semibold underline">
+                connect your agent
+              </Link>{" "}
+              (Claude Code, Cursor or any MCP client).
+            </p>
+          </>
         )}
       </section>
     </main>

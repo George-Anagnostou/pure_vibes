@@ -2,7 +2,9 @@
 // PostToolUse hook for mcp__glassbox__align: pop the align page open for the human
 // as a small app-style window, so they can re-rank while the agent waits on get_contract.
 // macOS + Chrome: chromeless --app window resized to phone-ish proportions on the right.
-// Anything else: the default browser.
+// Other desktops: the default browser (open / start / wslview / xdg-open).
+// Over SSH, on a headless box, or with GLASSBOX_POPUP=off: open nothing and tell the
+// agent to show the human the link instead. Never fails the tool call.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readStdin } from "./glassbox-lib.mjs";
@@ -15,10 +17,30 @@ const raw = JSON.stringify(input.tool_response ?? input.tool_result ?? "");
 const url = raw.match(/https?:\/\/[^"\s\\]+\/align\/[0-9a-f-]{36}/)?.[0];
 if (!url) process.exit(0); // e.g. align errored, or the contract came straight back
 
-const detached = (cmd, args) =>
-  spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+// A missing opener (no xdg-open, no Chrome) must not crash the hook.
+const detached = (cmd, args) => {
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {});
+    child.unref();
+  } catch {
+    // ignore: the agent is told to show the link either way
+  }
+};
 
-if (
+const env = process.env;
+const remote = Boolean(env.SSH_CONNECTION || env.SSH_TTY);
+const headlessLinux =
+  process.platform === "linux" &&
+  !env.WSL_DISTRO_NAME &&
+  !env.DISPLAY &&
+  !env.WAYLAND_DISPLAY;
+const disabled = /^(0|off|false|no)$/i.test(env.GLASSBOX_POPUP ?? "");
+const canOpen = !disabled && !remote && !headlessLinux;
+
+if (!canOpen) {
+  // fall through to the message below
+} else if (
   process.platform === "darwin" &&
   existsSync("/Applications/Google Chrome.app")
 ) {
@@ -44,15 +66,18 @@ if (
   detached("open", [url]);
 } else if (process.platform === "win32") {
   detached("cmd", ["/c", "start", "", url]);
+} else if (env.WSL_DISTRO_NAME) {
+  detached("wslview", [url]);
 } else {
   detached("xdg-open", [url]);
 }
 
+const additionalContext = canOpen
+  ? `Glass Box opened a pop-up for the human at ${url}. Also show them that link in one line in case no window appeared. Call get_contract now and keep calling it until they submit; don't proceed before that.`
+  : `Glass Box could not open a window on this machine. Show the human this link now so they can review your plan: ${url} . Then call get_contract and keep calling it until they submit; don't proceed before that.`;
+
 process.stdout.write(
   JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PostToolUse",
-      additionalContext: `Glass Box opened a pop-up for the human at ${url}. Call get_contract now and keep calling it until they submit; don't proceed before that.`,
-    },
+    hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext },
   }),
 );
