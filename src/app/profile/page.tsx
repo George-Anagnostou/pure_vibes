@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { readStrings } from "@/components/align-data";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
+import styles from "@/components/glassbox/glassbox.module.css";
+import { Shell } from "@/components/glassbox/shell";
 import { createClient } from "@/lib/supabase/server";
 import { ProfileForm } from "./profile-form";
 
@@ -12,7 +14,9 @@ export default async function ProfilePage() {
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user)
     return (
-      <SignInGate nextPath="/profile" title="Sign in to see your profile" />
+      <Shell>
+        <SignInGate nextPath="/profile" title="Sign in to see your profile" />
+      </Shell>
     );
 
   const { data: profile, error } = await supabase
@@ -22,21 +26,23 @@ export default async function ProfilePage() {
     .maybeSingle();
   if (error)
     return (
-      <ErrorCard
-        title="Could not load your profile"
-        body="The database did not respond. Refresh to try again."
-      />
+      <Shell>
+        <ErrorCard
+          title="Could not load your profile"
+          body="The database did not respond. Refresh to try again."
+        />
+      </Shell>
     );
 
   return (
-    <main className="mx-auto max-w-lg px-4 pt-6 pb-16">
-      <h1 className="text-2xl font-black tracking-tight">
-        Next time, it already knows.
-      </h1>
-      <p className="mt-1 text-ink-soft">
-        Your usual priorities, in order. Agents start from this.
-      </p>
-      <div className="mt-6">
+    <Shell>
+      <main className={styles.onboardShell}>
+        <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
+          Next time, it already <em>knows</em>
+        </h1>
+        <p className={styles.agentName}>
+          Your usual priorities, in order. Agents start from this.
+        </p>
         <ProfileForm
           initialRanked={readStrings(profile?.ranked_priorities)}
           profile={
@@ -49,7 +55,7 @@ export default async function ProfilePage() {
               : null
           }
         />
-      </div>
-    </main>
+      </main>
+    </Shell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 export function BillingActions({
   canSubscribe,
@@ -40,12 +41,12 @@ export function BillingActions({
   }
   return (
     <div className="mt-5 space-y-3">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {canSubscribe && (
           <button
             disabled={Boolean(busy)}
             onClick={() => open("checkout")}
-            className="min-h-12 rounded-xl bg-ink px-5 font-bold text-white disabled:opacity-60"
+            className={styles.btnDark}
           >
             {busy === "checkout"
               ? "Opening checkout…"
@@ -56,7 +57,8 @@ export function BillingActions({
           <button
             disabled={Boolean(busy)}
             onClick={() => open("portal")}
-            className="min-h-12 rounded-xl border-2 border-ink px-5 font-bold disabled:opacity-60"
+            className={styles.btnSecondary}
+            style={{ width: "auto", padding: "0 18px" }}
           >
             {busy === "portal" ? "Opening billing…" : "Manage billing"}
           </button>
@@ -64,13 +66,13 @@ export function BillingActions({
         <button
           disabled={Boolean(busy)}
           onClick={() => router.refresh()}
-          className="min-h-12 px-2 text-sm underline disabled:opacity-60"
+          className={styles.mutedLink}
         >
           Refresh status
         </button>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-stop">
+        <p role="alert" className={styles.alertCard}>
           {error}
         </p>
       )}

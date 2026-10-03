@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 const KEY_PLACEHOLDER = "gb_YOUR_KEY";
 
-type MintState =
+export type MintState =
   | { kind: "idle" }
   | { kind: "busy" }
   | { kind: "done"; key: string; name: string }
@@ -26,7 +27,7 @@ async function mintKey(name: string): Promise<string> {
   return body.key;
 }
 
-function useMint(onMinted?: () => void) {
+export function useMint(onMinted?: () => void) {
   const [state, setState] = useState<MintState>({ kind: "idle" });
   async function mint(name: string) {
     setState({ kind: "busy" });
@@ -235,7 +236,7 @@ export function setupSnippets(origin: string, key: string) {
   ];
 }
 
-function CopyBlock({ code }: { code: string }) {
+export function CopyBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative">
@@ -258,6 +259,43 @@ function CopyBlock({ code }: { code: string }) {
         {copied ? "Copied" : "Copy"}
       </button>
     </div>
+  );
+}
+
+export function MintForm({
+  state,
+  onMint,
+}: {
+  state: MintState;
+  onMint: (name: string) => void;
+}) {
+  const [name, setName] = useState("Claude Code");
+  return (
+    <>
+      <form
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          onMint(name);
+        }}
+        className={styles.inlineForm}
+      >
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={100}
+          aria-label="Agent name"
+          className={styles.fieldInput}
+        />
+        <button disabled={state.kind === "busy"} className={styles.btnDark}>
+          {state.kind === "busy" ? "Creating…" : "Mint key"}
+        </button>
+      </form>
+      {state.kind === "error" && (
+        <p role="alert" className={styles.alertCard} style={{ marginTop: 8 }}>
+          {state.message}
+        </p>
+      )}
+    </>
   );
 }
 

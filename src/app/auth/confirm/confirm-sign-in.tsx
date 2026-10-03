@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
 export function ConfirmSignIn({
   tokenHash,
   type,
@@ -35,31 +36,29 @@ export function ConfirmSignIn({
     }
   }
   return (
-    <div className="mt-6 space-y-4">
+    <div style={{ display: "grid", gap: 14 }}>
       {tokenHash ? (
-        <button
-          onClick={confirm}
-          disabled={busy}
-          className="min-h-12 rounded-xl bg-ink px-6 font-bold text-white disabled:opacity-60"
-        >
+        <button onClick={confirm} disabled={busy} className={styles.submit}>
           {busy ? "Signing in…" : "Continue to Glass Box"}
         </button>
       ) : (
-        <p role="alert">
+        <p role="alert" className={styles.warnCard}>
           Open the newest link in your email, or request another below.
         </p>
       )}
       {error && (
-        <p role="alert" className="text-stop">
+        <p role="alert" className={styles.alertCard}>
           {error}
         </p>
       )}
-      <Link
-        href={`/sign-in?next=${encodeURIComponent(next)}`}
-        className="block text-sm underline"
-      >
-        Request a new email
-      </Link>
+      <p style={{ textAlign: "center", margin: 0 }}>
+        <Link
+          href={`/sign-in?next=${encodeURIComponent(next)}`}
+          className={styles.mutedLink}
+        >
+          Request a new email
+        </Link>
+      </p>
     </div>
   );
 }

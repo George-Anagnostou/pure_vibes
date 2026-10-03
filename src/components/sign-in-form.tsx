@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
+
 export const NEXT_PATH_KEY = "glassbox:next";
 
 export function SignInForm({
@@ -80,31 +82,30 @@ export function SignInForm({
   }
 
   return (
-    <div className="space-y-5">
-      <form onSubmit={send} className="space-y-3">
-        <label htmlFor={`${id}-email`} className="block text-sm font-semibold">
-          Email
-        </label>
-        <input
-          id={`${id}-email`}
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setSentTo("");
-            setMessage("");
-          }}
-          placeholder="you@example.com"
-          disabled={busy !== null}
-          className="min-h-12 w-full rounded-xl border border-line bg-card px-4 text-base outline-none focus:border-ink"
-        />
-        <button
-          disabled={busy !== null}
-          className="min-h-12 w-full rounded-xl bg-ink px-5 font-bold text-white hover:bg-ink/85 disabled:opacity-60"
-        >
+    <div style={{ display: "grid", gap: 16 }}>
+      <form onSubmit={send}>
+        <div className={styles.fieldGroup}>
+          <label htmlFor={`${id}-email`} className={styles.fieldLabel}>
+            Email
+          </label>
+          <input
+            id={`${id}-email`}
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setSentTo("");
+              setMessage("");
+            }}
+            placeholder="you@example.com"
+            disabled={busy !== null}
+            className={styles.fieldInput}
+          />
+        </div>
+        <button disabled={busy !== null} className={styles.submit}>
           {busy === "send"
             ? "Sending…"
             : sentTo
@@ -113,22 +114,24 @@ export function SignInForm({
         </button>
       </form>
       {message && (
-        <p
-          role="status"
-          className="rounded-xl bg-go-bg p-4 text-sm font-semibold text-go"
-        >
+        <p role="status" className={styles.statusCard}>
           {message}
         </p>
       )}
       {showCode ? (
-        <form onSubmit={verify} className="space-y-3 border-t border-line pt-5">
-          <label
-            htmlFor={`${id}-token`}
-            className="block text-sm font-semibold"
-          >
+        <form
+          onSubmit={verify}
+          style={{
+            borderTop: "1px solid rgba(0, 0, 0, 0.1)",
+            paddingTop: 16,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <label htmlFor={`${id}-token`} className={styles.fieldLabel}>
             If your email includes a code
           </label>
-          <p className="text-sm text-ink-soft">
+          <p className={styles.smallBody} style={{ margin: 0 }}>
             Use the email address above. A code works even if you opened the
             email on another device.
           </p>
@@ -143,11 +146,12 @@ export function SignInForm({
             autoComplete="one-time-code"
             required
             disabled={busy !== null}
-            className="min-h-12 w-full rounded-xl border border-line bg-card px-4 text-lg tracking-widest outline-none focus:border-ink"
+            className={styles.fieldInput}
+            style={{ letterSpacing: "0.3em", fontSize: "1.05rem" }}
           />
           <button
             disabled={busy !== null || !email.trim()}
-            className="min-h-12 w-full rounded-xl border-2 border-ink px-5 font-bold disabled:opacity-60"
+            className={styles.btnSecondary}
           >
             {busy === "verify" ? "Signing in…" : "Verify code and sign in"}
           </button>
@@ -156,13 +160,14 @@ export function SignInForm({
         <button
           type="button"
           onClick={() => setShowCode(true)}
-          className="text-sm underline underline-offset-4"
+          className={styles.mutedLink}
+          style={{ justifySelf: "start" }}
         >
           I already have a sign-in code
         </button>
       )}
       {error && (
-        <p role="alert" className="text-sm font-semibold text-stop">
+        <p role="alert" className={styles.alertCard}>
           {error}
         </p>
       )}

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AgentSetup } from "@/components/connect-agent";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 export type AgentKeySummary = {
   id: string;
@@ -51,26 +52,57 @@ function KeyList({ keys }: { keys: AgentKeySummary[] }) {
   }
 
   return (
-    <section className="mt-6 rounded-2xl border border-line bg-card p-5">
-      <h2 className="text-lg font-black">Your agent keys</h2>
+    <section className={styles.optCard} style={{ marginTop: 16 }}>
+      <h2 className={styles.connectLabel}>Your agent keys</h2>
       {keys.length === 0 ? (
-        <p className="mt-1 text-sm text-ink-soft">No keys yet.</p>
+        <p className={styles.smallBody} style={{ margin: 0 }}>
+          No keys yet.
+        </p>
       ) : (
-        <ul className="mt-3 divide-y divide-line">
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {keys.map((k) => (
-            <li key={k.id} className="flex items-center gap-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{k.name}</p>
-                <p className="text-xs text-ink-soft" suppressHydrationWarning>
+            <li
+              key={k.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 0",
+              }}
+            >
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontWeight: 600,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {k.name}
+                </span>
+                <span
+                  className={styles.smallBody}
+                  style={{ fontSize: "0.72rem" }}
+                  suppressHydrationWarning
+                >
                   Created {when(k.created_at)} · Last used{" "}
                   {when(k.last_used_at)}
-                </p>
-              </div>
+                </span>
+              </span>
               <button
                 type="button"
                 disabled={busy === k.id}
                 onClick={() => revoke(k)}
-                className="rounded-lg border border-line px-3 py-1.5 text-sm font-semibold text-stop hover:border-stop disabled:opacity-60"
+                className={styles.btnSecondary}
+                style={{
+                  width: "auto",
+                  minHeight: 36,
+                  padding: "0 14px",
+                  color: "#c81e1e",
+                  borderColor: "rgba(200, 30, 30, 0.4)",
+                }}
               >
                 {busy === k.id ? "Revoking…" : "Revoke"}
               </button>
@@ -79,7 +111,7 @@ function KeyList({ keys }: { keys: AgentKeySummary[] }) {
         </ul>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+        <p role="alert" className={styles.alertCard} style={{ marginTop: 8 }}>
           {error}
         </p>
       )}
