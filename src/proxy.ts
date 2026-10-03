@@ -48,5 +48,6 @@ export const config = {
     "/connect/:path*",
     "/api/reviews/:path*",
     "/api/agent-keys/:path*",
+    "/api/install-codes/:path*",
   ],
 };

@@ -30,6 +30,9 @@ export type SpendRow = {
 };
 type Ins<Row, Req extends keyof Row> = Pick<Row, Req> & Partial<Omit<Row, Req>>;
 
+export type InstallCodeRow = {
+  code_hash: string; user_id: string; key_name: string; created_at: string; expires_at: string; used_at: string | null;
+};
 export type Database = {
   public: {
     Tables: {
@@ -39,6 +42,7 @@ export type Database = {
       workflow_runs: Table<WorkflowRun, Pick<WorkflowRun, "user_id" | "input" | "model"> & Partial<Omit<WorkflowRun, "user_id" | "input" | "model">>>;
       profiles: Table<ProfileRow, Ins<ProfileRow, "user_id">>;
       agent_keys: Table<AgentKeyRow, Ins<AgentKeyRow, "user_id" | "name" | "key_hash">>;
+      install_codes: Table<InstallCodeRow, Ins<InstallCodeRow, "code_hash" | "user_id" | "expires_at">>;
       reviews: Table<ReviewRow, Ins<ReviewRow, "user_id" | "agent_name" | "task" | "plan">>;
       contracts: Table<ContractRow, Ins<ContractRow, "review_id" | "user_id" | "ranked_priorities" | "dials" | "hard_lines" | "budget_cents">>;
       events: Table<EventRow, Ins<EventRow, "review_id" | "user_id" | "type" | "action">>;
