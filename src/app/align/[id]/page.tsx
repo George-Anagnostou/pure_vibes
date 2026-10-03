@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { readStrings, STATUS_LABEL } from "@/components/align-data";
-import { AlignPanel, FinalList } from "@/components/align-panel";
+import {
+  readAnswers,
+  readStrings,
+  STATUS_LABEL,
+} from "@/components/align-data";
+import { AlignPanel, FinalDecisions } from "@/components/align-panel";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,7 +53,7 @@ export default async function AlignPage({
       ? (
           await supabase
             .from("contracts")
-            .select("ranked_priorities, added_by_human")
+            .select("decisions, added_by_human")
             .eq("review_id", id)
             .maybeSingle()
         ).data
@@ -73,11 +77,11 @@ export default async function AlignPage({
             {contract ? (
               <>
                 <p className="text-ink-soft">
-                  {review.agent_name} is following this order:
+                  {review.agent_name} is following your decisions:
                 </p>
-                <FinalList
-                  names={readStrings(contract.ranked_priorities)}
-                  added={readStrings(contract.added_by_human)}
+                <FinalDecisions
+                  decisions={readAnswers(contract.decisions)}
+                  instructions={readStrings(contract.added_by_human)}
                 />
               </>
             ) : (

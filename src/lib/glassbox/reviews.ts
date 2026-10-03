@@ -5,11 +5,11 @@ import { revealAndCritique } from "@/lib/glassbox/llm";
 import type {
   Contract,
   Critique,
+  Decision,
+  DecisionAnswer,
   Dials,
   Revealed,
   ReviewStatus,
-  StatedPriority,
-  ApprovedStep,
 } from "@/lib/glassbox/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContractRow, Json } from "@/types/database";
@@ -31,14 +31,14 @@ export async function createReview(input: {
   userId: string;
   agentName: string;
   task: string;
-  plan?: string;
-  stated?: StatedPriority[];
+  plan?: string; // the agent's overall approach
+  decisions?: Decision[];
 }): Promise<ReviewResult> {
-  const stated = input.stated ?? [];
+  const decisions = input.decisions ?? [];
   const { revealed, critique } = await revealAndCritique({
     task: input.task,
     plan: input.plan,
-    stated,
+    stated: decisions,
   });
   const { data, error } = await createAdminClient()
     .from("reviews")
@@ -46,8 +46,8 @@ export async function createReview(input: {
       user_id: input.userId,
       agent_name: input.agentName,
       task: input.task,
-      plan: input.plan?.trim() || "(no step-by-step plan given)",
-      stated: stated as unknown as Json,
+      plan: input.plan?.trim() || "(no approach given)",
+      stated: decisions as unknown as Json,
       revealed: revealed as unknown as Json,
       critique: critique as unknown as Json,
     })
@@ -63,96 +63,42 @@ export async function createReview(input: {
 }
 
 export const CONTRACT_INSTRUCTIONS =
-  "This plan is binding. Do the approved_steps in this order, the way each one describes; human-added steps are required. Never do anything in removed_by_human, and don't add steps or data sources the human didn't approve. Follow plan_guidance. If you need to change your approach, call align again. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
+  "These decisions are binding: the human made them, not you. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
 
-// Names of the agent's stated priorities; older rows stored plain strings.
-export function statedNames(stated: unknown): string[] {
-  if (!Array.isArray(stated)) return [];
-  return stated
-    .map((p) => (typeof p === "string" ? p : (p as StatedPriority)?.name))
-    .filter((n): n is string => typeof n === "string" && n.length > 0);
+// "You changed 2 of 6 decisions: Scope → 3-hospital proof of concept; …"
+export function describeDecisions(decisions: DecisionAnswer[], instructions: string[]) {
+  const changed = decisions.filter((d) => d.changed);
+  const head = changed.length
+    ? `The human changed ${changed.length} of ${decisions.length} decisions: ${changed
+        .map((d) => `${d.topic} → ${d.answer}`)
+        .join("; ")}.`
+    : `The human kept all ${decisions.length} of your decisions.`;
+  return instructions.length ? `${head} They also told you: ${instructions.join("; ")}.` : head;
 }
 
-// "Human moved Price to #1 and Speed to #2; added Price; dropped Airline." — compares the
-// human's final ranking with the order the agent gave when it was interviewed.
-export function describeChanges(
-  ranked: string[],
-  agentOrder: string[],
-  added: string[],
-  removed: string[] = [],
-) {
-  const norm = (s: string) => s.trim().toLowerCase();
-  const before = agentOrder.map(norm);
-  const parts: string[] = [];
-  const top = ranked[0];
-  if (top && before[0] !== norm(top)) parts.push(`moved ${top} to #1`);
-  const formerTop = agentOrder[0];
-  if (formerTop && !removed.some((r) => norm(r) === norm(formerTop))) {
-    const at = ranked.findIndex((r) => norm(r) === norm(formerTop));
-    if (at === -1) parts.push(`dropped ${formerTop}`);
-    else if (at === ranked.length - 1 && ranked.length > 1)
-      parts.push(`${formerTop} to last`);
-    else if (at > 0) parts.push(`${formerTop} to #${at + 1}`);
-  }
-  const moves = parts.length
-    ? `Human ${parts.join(" and ")}`
-    : "Human kept your step order";
-  return `${moves}${added.length ? `; added ${added.join(", ")}` : ""}${removed.length ? `; dropped ${removed.join(", ")}` : ""}.`;
-}
-
-// The approved names, resolved back to the agent's own step details where they exist.
-export function approvedSteps(
-  ranked: string[],
-  agentSteps: unknown,
-  added: string[],
-): ApprovedStep[] {
-  const norm = (s: string) => s.trim().toLowerCase();
-  const steps = Array.isArray(agentSteps)
-    ? (agentSteps.filter((p) => p && typeof p === "object") as StatedPriority[])
-    : [];
-  return ranked.map((name, i) => {
-    const s = steps.find((p) => norm(p.name) === norm(name));
-    const human = added.some((a) => norm(a) === norm(name)) || !s;
-    return {
-      step: i + 1,
-      name,
-      ...(s?.how ? { how: s.how } : {}),
-      ...(s?.uses?.length ? { uses: s.uses } : {}),
-      ...(s?.est_tokens !== undefined ? { est_tokens: s.est_tokens } : {}),
-      ...(s?.est_cost_usd !== undefined
-        ? { est_cost_usd: s.est_cost_usd }
-        : {}),
-      ...(human ? { added_by_human: true as const } : {}),
-    };
-  });
-}
-
-export function toContract(
-  row: ContractRow,
-  agentOrder: string[] = [],
-  agentSteps: unknown = [],
-): Contract {
+export function toContract(row: ContractRow): Contract {
   const hardLines = row.hard_lines as Record<string, boolean>;
-  const ranked = row.ranked_priorities as string[];
-  const added = (row.added_by_human as string[] | null) ?? [];
-  const removed = (row.removed_by_human as string[] | null) ?? [];
+  const decisions = ((row.decisions as DecisionAnswer[] | null) ?? []).map((d) => ({
+    topic: d.topic,
+    question: d.question,
+    decision: d.answer,
+    changed_by_human: d.changed,
+    ...(d.changed && d.agent_choice ? { your_original_choice: d.agent_choice } : {}),
+  }));
+  const instructions = (row.added_by_human as string[] | null) ?? [];
   const lines = Object.entries(hardLines)
     .filter(([, on]) => on)
-    .map(([k]) =>
-      k === "budget_cap" ? `budget_max_cents:${row.budget_cents}` : k,
-    );
+    .map(([k]) => (k === "budget_cap" ? `budget_max_cents:${row.budget_cents}` : k));
   return {
     review_id: row.review_id,
-    approved_steps: approvedSteps(ranked, agentSteps, added),
-    ranked_priorities: ranked,
-    dials: row.dials as Dials,
+    decisions,
+    instructions_from_human: instructions,
+    plan_guidance: row.plan_guidance ?? "",
     hard_lines: lines,
     budget_cents: row.budget_cents,
-    added_by_human: added,
-    removed_by_human: removed,
-    plan_guidance: row.plan_guidance ?? "",
+    dials: row.dials as Dials,
     instructions: CONTRACT_INSTRUCTIONS,
-    message: `${describeChanges(ranked, agentOrder, added, removed)}${row.notes ? ` Note: ${row.notes}` : ""}`,
+    message: `${describeDecisions(row.decisions as DecisionAnswer[], instructions)}${row.notes ? ` Note: ${row.notes}` : ""}`,
   };
 }
 
@@ -167,7 +113,7 @@ export async function getContract(
   const admin = createAdminClient();
   const { data: review, error } = await admin
     .from("reviews")
-    .select("id, status, stated")
+    .select("id, status")
     .eq("id", reviewId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -187,7 +133,7 @@ export async function getContract(
   if (cErr) throw cErr;
   return {
     status: "approved",
-    contract: toContract(row, statedNames(review.stated), review.stated),
+    contract: toContract(row),
   };
 }
 

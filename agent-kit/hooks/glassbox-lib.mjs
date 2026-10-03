@@ -46,13 +46,17 @@ export function contractContext(latest) {
     return `Glass Box: the human ${latest.status} your last plan ("${latest.task}"). Do not execute it; call align with a revised plan.`;
   }
   const c = latest.contract;
+  const decisions = (c.decisions ?? []).map(
+    (d) =>
+      `- ${d.topic}: ${d.decision}${d.changed_by_human ? " (changed by the human)" : ""}`,
+  );
   return [
-    `Glass Box priority contract for "${latest.task}" (review_id ${latest.review_id}) — BINDING:`,
-    `Ranked priorities: ${c.ranked_priorities.map((p, i) => `${i + 1}. ${p}`).join("  ")}`,
-    `Hard lines: ${c.hard_lines.join(", ")}`,
-    c.added_by_human?.length
-      ? `Added by the human (you missed these): ${c.added_by_human.join(", ")}`
+    `Glass Box contract for "${latest.task}" (review_id ${latest.review_id}) — BINDING. The human decided:`,
+    ...decisions,
+    c.instructions_from_human?.length
+      ? `The human also told you: ${c.instructions_from_human.join("; ")}`
       : "",
+    `Hard lines: ${c.hard_lines.join(", ")}`,
     `Plan guidance: ${c.plan_guidance}`,
     c.instructions,
   ]

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { StatedPrioritySchema } from "@/lib/glassbox/types";
+import { DecisionSchema } from "@/lib/glassbox/types";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { createReview } from "@/lib/glassbox/reviews";
 import { errorResponse, json, readJson } from "@/lib/http";
@@ -7,35 +7,27 @@ import { errorResponse, json, readJson } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const body = z
-  .object({
-    task: z.string().trim().min(1).max(4000),
-    plan: z.string().trim().max(15000).optional(),
-    agent_name: z.string().trim().max(100).optional(),
-    steps: z.array(StatedPrioritySchema).min(1).max(20).optional(),
-    priorities: z.array(StatedPrioritySchema).min(1).max(20).optional(), // legacy name
-  })
-  .refine((b) => b.steps || b.priorities, {
-    message: "Send your approach as steps.",
-  });
+const body = z.object({
+  task: z.string().trim().min(1).max(4000),
+  plan: z.string().trim().max(15000).optional(), // the agent's approach
+  agent_name: z.string().trim().max(100).optional(),
+  decisions: z.array(DecisionSchema).min(1).max(12),
+});
 
-// POST /api/review — an agent submits its approach as steps ({name, how, uses, est_tokens,
-// est_cost_usd, why, source}[]) and optional thinking: Reveal + Critique,
+// POST /api/review — an agent submits its approach (plan) and the decisions it's making on
+// the human's behalf (see DecisionSchema): Reveal + Critique,
 // stored as a pending review. Auth: Authorization: Bearer gb_... (agent key).
 // Returns only {review_id, align_url}: the analysis is for the human, not the agent.
 export async function POST(request: Request) {
   try {
     const agent = await requireAgent(request);
-    const { task, plan, agent_name, steps, priorities } = await readJson(
-      request,
-      body,
-    );
+    const { task, plan, agent_name, decisions } = await readJson(request, body);
     const result = await createReview({
       userId: agent.userId,
       agentName: agent_name ?? agent.agentName,
       task,
       plan,
-      stated: steps ?? priorities,
+      decisions,
     });
     return json(
       {

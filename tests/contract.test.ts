@@ -2,47 +2,32 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/glassbox/llm", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({}));
-const { describeChanges, statedNames } = await import("@/lib/glassbox/reviews");
+const { describeDecisions } = await import("@/lib/glassbox/reviews");
 
-describe("describeChanges", () => {
-  it("reports the new #1, where the agent's #1 went, additions and drops", () => {
+describe("describeDecisions", () => {
+  const d = (topic: string, answer: string, changed: boolean) => ({
+    topic,
+    question: "",
+    answer,
+    changed,
+  });
+  it("lists what the human changed and their instructions", () => {
     expect(
-      describeChanges(
-        ["Price", "Speed"],
-        ["Speed", "Airline"],
-        ["Price"],
-        ["Airline"],
+      describeDecisions(
+        [
+          d("Scope", "3-hospital proof of concept", true),
+          d("Data source", "CMS files", false),
+        ],
+        ["Show me results before scaling"],
       ),
     ).toBe(
-      "Human moved Price to #1 and Speed to last; added Price; dropped Airline.",
+      "The human changed 1 of 2 decisions: Scope → 3-hospital proof of concept. They also told you: Show me results before scaling.",
     );
   });
-
-  it("does not double-report a dropped #1, and notes a kept order", () => {
-    expect(
-      describeChanges(
-        ["Honesty", "Accuracy"],
-        ["Get the answer", "Accuracy"],
-        ["Honesty"],
-        ["Get the answer"],
-      ),
-    ).toBe("Human moved Honesty to #1; added Honesty; dropped Get the answer.");
-    expect(describeChanges(["Scale", "Cost"], ["scale", "cost"], [])).toBe(
-      "Human kept your step order.",
+  it("says when everything was kept", () => {
+    expect(describeDecisions([d("Scope", "All", false)], [])).toBe(
+      "The human kept all 1 of your decisions.",
     );
-  });
-});
-
-describe("statedNames", () => {
-  it("reads interviewed priorities and legacy string rows", () => {
-    expect(
-      statedNames([
-        { name: "Speed", why: "today" },
-        { name: "Airline", why: "" },
-      ]),
-    ).toEqual(["Speed", "Airline"]);
-    expect(statedNames(["Cost", "Scale"])).toEqual(["Cost", "Scale"]);
-    expect(statedNames(null)).toEqual([]);
   });
 });
 
@@ -55,53 +40,50 @@ describe("sanitizeSuggestions", async () => {
     await vi.importActual<typeof import("@/lib/glassbox/llm")>(
       "@/lib/glassbox/llm",
     );
-  const stated = [
-    { name: "Speed", why: "" },
-    { name: "Real, accurate data (no fabricated prices)", why: "" },
-    { name: "Airline", why: "" },
+  const decision = (topic: string, choice: string) => ({
+    topic,
+    question: `${topic}?`,
+    choice,
+    thinks_you_want: "",
+    why: "",
+    alternatives: [{ option: "x", tradeoff: "y" }],
+  });
+  const decisions = [
+    decision("Scope", "All 20 hospitals"),
+    decision("Data source", "CMS files"),
   ];
   const sg = (
-    action: "add" | "drop" | "raise" | "lower",
-    priority: string,
+    action: "challenge" | "add",
+    topic: string,
+    recommend: string,
     ref = 0,
   ) => ({
     action,
     ref,
-    priority,
+    topic,
+    question: "",
+    recommend,
+    options: [],
     why: "",
   });
-  const show = (out: { action: string; priority: string }[]) =>
-    out.map((s) => `${s.action} ${s.priority}`);
 
-  it("drops suggestions that don't fit the agent's list", () => {
+  it("keeps real challenges and new decisions, normalized to the agent's topic", () => {
     const out = sanitizeSuggestions(
       [
-        sg("add", "Price"),
-        sg("add", "speed"),
-        sg("raise", "Speed", 1),
-        sg("lower", "Airline", 3),
-        sg("drop", "Airline", 3),
-        sg("drop", "Seat"),
-        sg("add", "Price"),
+        sg("challenge", "scope", "3-hospital proof of concept", 1),
+        sg("challenge", "Data source", "CMS files", 2), // same as agent's choice
+        sg("challenge", "Timeline", "Today", 9), // no such decision
+        sg("add", "Missing data", "Mark as unavailable"),
+        sg("add", "Scope", "Top 5"), // already a decision
+        sg("challenge", "Scope", "Top 5", 1), // duplicate challenge
       ],
-      stated,
+      decisions,
     );
-    expect(show(out)).toEqual(["add Price", "drop Airline"]);
-  });
-
-  it("resolves paraphrased names and numeric refs to the agent's exact name", () => {
-    const out = sanitizeSuggestions(
-      [
-        sg("raise", "Accuracy / no fabrication", 2),
-        sg("lower", "speed"),
-        sg("drop", "#3"),
-      ],
-      stated,
-    );
-    expect(show(out)).toEqual([
-      "raise Real, accurate data (no fabricated prices)",
-      "lower Speed",
-      "drop Airline",
+    expect(
+      out.map((s) => `${s.action} ${s.topic} → ${s.recommend} (#${s.ref})`),
+    ).toEqual([
+      "challenge Scope → 3-hospital proof of concept (#1)",
+      "add Missing data → Mark as unavailable (#0)",
     ]);
   });
 });

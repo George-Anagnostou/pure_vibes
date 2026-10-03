@@ -35,7 +35,7 @@ console.log(
   `[quiz-agent] Task: ${QUIZ_PLAN.task}\n[quiz-agent] Submitting plan to Glass Box...`,
 );
 console.log(
-  `[quiz-agent] My priorities: ${QUIZ_PLAN.priorities.map((p) => p.name).join(" > ")}`,
+  `[quiz-agent] My decisions: ${QUIZ_PLAN.decisions.map((d) => `${d.topic} → ${d.choice}`).join("; ")}`,
 );
 const review = await call("/api/review", {
   method: "POST",
@@ -59,7 +59,7 @@ for (;;) {
 }
 console.log(`\n${green("Contract received.")} ${contract.message}`);
 console.log(
-  `Priorities: ${contract.ranked_priorities.join(" > ")}\nHard lines: ${contract.hard_lines.join(", ")}`,
+  `Decisions: ${contract.decisions.map((d: { topic: string; decision: string }) => `${d.topic} → ${d.decision}`).join("; ")}\nHard lines: ${contract.hard_lines.join(", ")}`,
 );
 
 console.log(

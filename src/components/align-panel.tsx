@@ -1,70 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  readStated,
-  readSuggestions,
-  samePriority,
+  readDecisions,
+  readDecisionSuggestions,
   type AlignReview,
-  type Suggestion,
 } from "@/components/align-data";
 import {
-  PriorityBoard,
-  type Board,
-  type BoardItem,
-} from "@/components/priority-board";
+  answerFor,
+  buildCards,
+  DecisionCards,
+  ExtraInstructions,
+  type Answer,
+} from "@/components/decision-cards";
+
+export type FinalDecision = { topic: string; answer: string; changed: boolean };
 
 type Phase =
   | { kind: "editing" }
   | { kind: "busy"; action: "send" | "reject" }
-  | { kind: "sent"; ranked: BoardItem[] }
+  | { kind: "sent"; decisions: FinalDecision[]; instructions: string[] }
   | { kind: "rejected" };
-
-const HINT: Record<Exclude<Suggestion["action"], "add">, string> = {
-  drop: "Maybe drop",
-  raise: "Maybe earlier",
-  lower: "Maybe later",
-};
-
-// The agent's steps start in the plan (with Glass Box's nudges as hints); its
-// suggested new steps start in the "also consider" column.
-function initialBoard(review: AlignReview): Board {
-  const suggestions = readSuggestions(review.critique);
-  const ranked: BoardItem[] = readStated(review.stated).map((p) => {
-    const nudge = suggestions.find(
-      (s) => s.action !== "add" && samePriority(s.priority, p.name),
-    );
-    return {
-      id: `agent:${p.name}`,
-      name: p.name,
-      detail: p.why || undefined,
-      how: p.how,
-      uses: p.uses,
-      estTokens: p.estTokens,
-      estCostUsd: p.estCostUsd,
-      source: p.source,
-      origin: "agent",
-      hint:
-        nudge && nudge.action !== "add"
-          ? `${HINT[nudge.action]}${nudge.why ? `: ${nudge.why}` : ""}`
-          : undefined,
-    };
-  });
-  const pool: BoardItem[] = suggestions
-    .filter(
-      (s) =>
-        s.action === "add" &&
-        !ranked.some((r) => samePriority(r.name, s.priority)),
-    )
-    .map((s) => ({
-      id: `suggested:${s.priority}`,
-      name: s.priority,
-      detail: s.why || undefined,
-      source: "Glass Box",
-      origin: "suggested",
-    }));
-  return { ranked, pool };
-}
 
 async function post(path: string, body: unknown) {
   const res = await fetch(path, {
@@ -78,8 +34,12 @@ async function post(path: string, body: unknown) {
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status}).`);
 }
 
-// The whole decision in one screen: drag the agent's priorities and Glass Box's
-// suggestions into a ranking, send. Used on /align/[id] and in the inbox.
+const same = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// The whole review in one screen: how the agent is approaching the task, the
+// decisions it's making for you (keep, switch, or say what you want), anything else
+// it should know, send. Used on /align/[id] and in the inbox.
 export function AlignPanel({
   review,
   onDone,
@@ -87,56 +47,59 @@ export function AlignPanel({
   review: AlignReview;
   onDone?: () => void;
 }) {
-  const [board, setBoard] = useState<Board>(() => initialBoard(review));
-  const [deleted, setDeleted] = useState<BoardItem[]>([]);
-
-  function deleteItem(item: BoardItem) {
-    setBoard((b) => ({
-      ranked: b.ranked.filter((i) => i.id !== item.id),
-      pool: b.pool.filter((i) => i.id !== item.id),
-    }));
-    if (item.origin === "agent") setDeleted((d) => [...d, item]);
-  }
-
-  function addItem(name: string) {
-    setBoard((b) =>
-      [...b.ranked, ...b.pool].some((i) => samePriority(i.name, name))
-        ? b
-        : {
-            ...b,
-            ranked: [
-              ...b.ranked,
-              {
-                id: `human:${name}:${Date.now()}`,
-                name,
-                source: "You",
-                origin: "human",
-              },
-            ],
-          },
-    );
-  }
+  const cards = useMemo(
+    () =>
+      buildCards(
+        readDecisions(review.stated),
+        readDecisionSuggestions(review.critique),
+      ),
+    [review.stated, review.critique],
+  );
+  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [instructions, setInstructions] = useState<string[]>([]);
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [error, setError] = useState("");
 
+  // Every decision with its final answer; Glass Box cards count only if answered.
+  const finalDecisions = cards.flatMap((card) => {
+    const answer = answerFor(card, answers[card.key]);
+    if (!answer) return [];
+    const changed = card.agentChoice ? !same(answer, card.agentChoice) : true;
+    return [{ card, answer, changed }];
+  });
+  const changes =
+    finalDecisions.filter((d) => d.changed).length + instructions.length;
+
   async function send() {
-    if (!board.ranked.length) {
-      setError("Rank at least one priority.");
+    if (!finalDecisions.length && !instructions.length) {
+      setError("Answer at least one decision.");
       return;
     }
     setError("");
     setPhase({ kind: "busy", action: "send" });
     try {
       await post(`/api/reviews/${review.id}/approve`, {
-        ranked_priorities: board.ranked.map((i) => i.name),
-        added_by_human: board.ranked
-          .filter((i) => i.origin !== "agent")
-          .map((i) => i.name),
-        removed_by_human: [...board.pool, ...deleted]
-          .filter((i) => i.origin === "agent")
-          .map((i) => i.name),
+        decisions: finalDecisions.map(({ card, answer, changed }) => ({
+          topic: card.topic,
+          question: card.question,
+          answer,
+          ...(card.agentChoice ? { agent_choice: card.agentChoice } : {}),
+          changed,
+        })),
+        ...(finalDecisions.length
+          ? {}
+          : { ranked_priorities: ["Follow the human's instructions"] }),
+        added_by_human: instructions,
       });
-      setPhase({ kind: "sent", ranked: board.ranked });
+      setPhase({
+        kind: "sent",
+        decisions: finalDecisions.map(({ card, answer, changed }) => ({
+          topic: card.topic,
+          answer,
+          changed,
+        })),
+        instructions,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not send.");
       setPhase({ kind: "editing" });
@@ -163,19 +126,17 @@ export function AlignPanel({
             <div>
               <p className="text-2xl font-black tracking-tight">Sent.</p>
               <p className="mt-1 text-ink-soft">
-                {review.agent_name} will follow this plan, in this order.
+                {review.agent_name} will follow your decisions.
               </p>
             </div>
-            <FinalList
-              names={phase.ranked.map((i) => i.name)}
-              added={phase.ranked
-                .filter((i) => i.origin !== "agent")
-                .map((i) => i.name)}
+            <FinalDecisions
+              decisions={phase.decisions}
+              instructions={phase.instructions}
             />
           </>
         ) : (
           <div>
-            <p className="text-2xl font-black tracking-tight">Rejected.</p>
+            <p className="text-2xl font-black tracking-tight">Stopped.</p>
             <p className="mt-1 text-ink-soft">
               {review.agent_name} won&apos;t go ahead with this.
             </p>
@@ -217,34 +178,45 @@ export function AlignPanel({
   }
 
   const busy = phase.kind === "busy";
+  const approach =
+    review.plan && !review.plan.startsWith("(no ") ? review.plan : "";
 
   return (
-    <div className="space-y-6">
-      <section aria-labelledby={`rank-${review.id}`}>
-        {review.plan && !review.plan.startsWith("(no step-by-step plan") && (
-          <details className="mb-3 rounded-xl border border-line bg-card px-3 py-2 text-sm">
-            <summary className="cursor-pointer font-semibold">
-              What it&apos;s thinking
-            </summary>
-            <p className="mt-2 whitespace-pre-wrap text-ink-soft">
-              {review.plan}
-            </p>
-          </details>
-        )}
-        <p id={`rank-${review.id}`} className="text-sm text-ink-soft">
-          How {review.agent_name} plans to do it, with what each step pulls from
-          and costs. Drag to reorder, pull steps in from the right, ✕ to delete,
-          or type your own.
+    <div className="space-y-5">
+      {approach && (
+        <section className="rounded-xl bg-paper px-3 py-2.5">
+          <h2 className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
+            How it&apos;s approaching this
+          </h2>
+          <p className="mt-1 text-[14px] leading-snug">{approach}</p>
+        </section>
+      )}
+
+      <section aria-labelledby={`dec-${review.id}`}>
+        <h2
+          id={`dec-${review.id}`}
+          className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
+        >
+          Decisions it&apos;s making for you
+        </h2>
+        <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
+          Keep its choice, pick another, or tell it what you actually want.
         </p>
-        <div className="mt-3">
-          <PriorityBoard
-            board={board}
-            onChange={setBoard}
-            onDelete={deleteItem}
-            onAdd={addItem}
+        {cards.length ? (
+          <DecisionCards
+            cards={cards}
+            answers={answers}
+            onAnswer={(key, a) => setAnswers((prev) => ({ ...prev, [key]: a }))}
           />
-        </div>
+        ) : (
+          <p className="rounded-xl border-2 border-dashed border-line p-4 text-sm text-ink-soft">
+            The agent didn&apos;t list any decisions. Tell it what you want
+            below.
+          </p>
+        )}
       </section>
+
+      <ExtraInstructions items={instructions} onChange={setInstructions} />
 
       <div className="space-y-3">
         {error && (
@@ -260,8 +232,10 @@ export function AlignPanel({
         >
           {phase.kind === "busy" && phase.action === "send" ? (
             <span className="gb-pulse">Sending…</span>
+          ) : changes ? (
+            `Send ${changes} change${changes === 1 ? "" : "s"} to ${review.agent_name}`
           ) : (
-            `Send to ${review.agent_name}`
+            `Looks right, send to ${review.agent_name}`
           )}
         </button>
         <p className="text-center">
@@ -272,8 +246,8 @@ export function AlignPanel({
             className="text-sm font-semibold text-ink-soft underline underline-offset-4 hover:text-stop disabled:opacity-60"
           >
             {phase.kind === "busy" && phase.action === "reject"
-              ? "Rejecting…"
-              : "Reject this request"}
+              ? "Stopping…"
+              : "Stop, don't do this"}
           </button>
         </p>
       </div>
@@ -281,33 +255,42 @@ export function AlignPanel({
   );
 }
 
-export function FinalList({
-  names,
-  added = [],
+export function FinalDecisions({
+  decisions,
+  instructions = [],
 }: {
-  names: string[];
-  added?: string[];
+  decisions: FinalDecision[];
+  instructions?: string[];
 }) {
   return (
-    <ol className="space-y-2">
-      {names.map((name, i) => (
+    <ul className="space-y-1.5">
+      {decisions.map((d) => (
         <li
-          key={`${name}-${i}`}
-          className="flex items-center gap-3 rounded-xl border border-line bg-card px-3 py-3"
+          key={d.topic}
+          className="rounded-xl border border-line bg-card px-3 py-2 text-[14px]"
         >
-          <span
-            className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-bold ${i === 0 ? "bg-ink text-white" : "bg-paper"}`}
-          >
-            {i + 1}
+          <span className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
+            {d.topic}
           </span>
-          <span className="font-semibold">{name}</span>
-          {added.some((a) => samePriority(a, name)) && (
-            <span className="rounded-full bg-go-bg px-2 py-0.5 text-xs font-semibold text-go">
-              Added
+          {d.changed && (
+            <span className="ml-1.5 rounded bg-ink px-1 py-px text-[10px] font-semibold text-white uppercase">
+              Changed
             </span>
           )}
+          <span className="block font-semibold">{d.answer}</span>
         </li>
       ))}
-    </ol>
+      {instructions.map((t) => (
+        <li
+          key={t}
+          className="rounded-xl border border-dashed border-line bg-card px-3 py-2 text-[14px]"
+        >
+          <span className="text-[11px] font-bold tracking-wide text-go uppercase">
+            You added
+          </span>
+          <span className="block font-semibold">{t}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

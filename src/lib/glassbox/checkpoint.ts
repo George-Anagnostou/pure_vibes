@@ -221,7 +221,11 @@ export async function runCheckpoint(
       reason: "No approved contract — call align first",
     };
   }
-  const result = evaluateCheckpoint(input, lookup.contract);
+  // The human's decisions stand in for ranked priorities (first = most weight).
+  const result = evaluateCheckpoint(input, {
+    hard_lines: lookup.contract.hard_lines,
+    ranked_priorities: lookup.contract.decisions.map((d) => `${d.topic}: ${d.decision}`),
+  });
   await logEvent({
     reviewId,
     userId,

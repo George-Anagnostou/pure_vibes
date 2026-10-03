@@ -134,24 +134,122 @@ export const StatedPrioritySchema = z.object({
 });
 export type StatedPriority = z.infer<typeof StatedPrioritySchema>;
 
-// ---- Suggestions: the only critique output the human sees ----
+// ---- Decisions: the judgment calls the agent is making on the human's behalf ----
+// The heart of the interview: what the agent THINKS the human wants, and how it is
+// weighing the trade-offs, so the human can correct it before it acts.
+const OptionSchema = z.object({
+  option: z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+    .describe("A concrete alternative, e.g. '3-hospital proof of concept'"),
+  tradeoff: z
+    .string()
+    .trim()
+    .max(240)
+    .describe(
+      "What you gain and give up, e.g. 'Minutes instead of hours; proves the parsing works before scaling'",
+    ),
+});
+export type DecisionOption = z.infer<typeof OptionSchema>;
+
+export const DecisionSchema = z.object({
+  topic: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .describe("Short label, e.g. 'Scope', 'Data source', 'Accuracy vs speed'"),
+  question: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe(
+      "The decision as a question, e.g. 'How many hospitals do I scan?'",
+    ),
+  choice: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("What you're planning to do, e.g. 'All ~20 SF hospitals'"),
+  thinks_you_want: z
+    .string()
+    .trim()
+    .max(200)
+    .describe(
+      "What you believe the human wants that led to this choice, e.g. 'Complete coverage matters more than speed'",
+    ),
+  why: z
+    .string()
+    .trim()
+    .max(300)
+    .describe(
+      "How you weighed it: the reasoning and evidence behind the choice",
+    ),
+  alternatives: z
+    .array(OptionSchema)
+    .min(1)
+    .max(3)
+    .describe("The real alternatives you considered"),
+  est_tokens: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Model tokens your choice will consume"),
+  est_cost_usd: z
+    .number()
+    .min(0)
+    .optional()
+    .describe("Dollars your choice will spend (tokens + paid services)"),
+  est_time: z
+    .string()
+    .trim()
+    .max(40)
+    .optional()
+    .describe("Rough time your choice takes, e.g. '2 hours', '5 min'"),
+  source: z
+    .enum(["request", "instructions", "rules", "judgment", "assumption"])
+    .optional()
+    .describe(
+      "request = the human said so; instructions = their instructions or project files; rules = your guidelines; judgment = your own default; assumption = you guessed",
+    ),
+});
+export type Decision = z.infer<typeof DecisionSchema>;
+
+// ---- Suggestions: Glass Box's advice on the decisions (the only critique the human sees) ----
 export const SuggestionSchema = z.object({
-  action: z.enum(["add", "drop", "raise", "lower"]),
+  action: z
+    .enum(["challenge", "add"])
+    .describe(
+      "challenge = the agent's choice on an existing decision is likely wrong for this person; add = a decision the agent is making implicitly and didn't list",
+    ),
   ref: z
     .number()
     .int()
-    .describe(
-      "For drop/raise/lower: the number of the agent's priority in its numbered list (1 = first). For add: 0.",
-    ),
-  priority: z
+    .describe("For challenge: the decision's number (1 = first). For add: 0."),
+  topic: z
     .string()
     .describe(
-      "For add: a new short label. Otherwise: exactly the agent's priority name.",
+      "For challenge: copy the decision's topic. For add: a short new topic.",
+    ),
+  question: z
+    .string()
+    .describe("For add: the decision as a question. For challenge: copy it."),
+  recommend: z.string().describe("The option you'd recommend for this person"),
+  options: z
+    .array(OptionSchema)
+    .max(3)
+    .describe(
+      "For add: 2-3 options including the one the agent will likely default to. For challenge: [] (or one new option if your recommendation isn't among the agent's alternatives).",
     ),
   why: z
     .string()
     .describe(
-      "One plain sentence addressed to the human, e.g. 'You didn't mention cost — a flight tomorrow could be half the price.'",
+      "One short sentence to the human: why this person probably wants something different",
     ),
 });
 export type Suggestion = z.infer<typeof SuggestionSchema>;
@@ -160,7 +258,7 @@ export type Suggestion = z.infer<typeof SuggestionSchema>;
 export const CritiqueSchema = z.object({
   suggestions: z
     .array(SuggestionSchema)
-    .describe("3-6 suggestions, most important first"),
+    .describe("2-5 suggestions, most important first"),
   hard_line_risks: z.array(
     z.object({
       step: z.string().describe("The plan step at risk"),
@@ -192,36 +290,46 @@ export const CritiqueSchema = z.object({
 });
 export type Critique = z.infer<typeof CritiqueSchema>;
 
-// ---- Contract (returned to the agent after human approval) ----
-// One step of the approved plan, as the agent must now carry it out.
-export type ApprovedStep = {
-  step: number;
-  name: string;
-  how?: string;
-  uses?: string[];
-  est_tokens?: number;
-  est_cost_usd?: number;
-  added_by_human?: true; // typed in by the human or accepted from a Glass Box suggestion
+// ---- Contract (returned to the agent after the human decides) ----
+export type ContractDecision = {
+  topic: string;
+  question: string;
+  decision: string; // what the agent must do
+  changed_by_human: boolean;
+  your_original_choice?: string;
 };
 
 export type Contract = {
   review_id: string;
-  approved_steps: ApprovedStep[]; // the binding plan, in the human's order
-  ranked_priorities: string[]; // the same step names, kept for older agents
-  dials: Dials;
+  decisions: ContractDecision[];
+  instructions_from_human: string[]; // free-text steps/instructions the human typed
+  plan_guidance: string;
   hard_lines: string[]; // e.g. ["no_unauthorized_access", "budget_max_cents:2000"]
   budget_cents: number;
-  added_by_human: string[]; // steps the human added
-  removed_by_human: string[]; // agent steps the human deleted
-  plan_guidance: string;
+  dials: Dials;
   instructions: string;
   message: string;
 };
 
 // ---- Approval payload (UI -> /api/reviews/[id]/approve) ----
 // Only the ranking is required; dials/hard lines/budget fall back to the profile, then defaults.
+// The human's final answer on one decision.
+export const DecisionAnswerSchema = z.object({
+  topic: z.string().trim().min(1).max(60),
+  question: z.string().trim().max(200),
+  answer: z.string().trim().min(1).max(300),
+  agent_choice: z.string().trim().max(200).optional(), // absent for decisions the agent never listed
+  changed: z.boolean(),
+});
+export type DecisionAnswer = z.infer<typeof DecisionAnswerSchema>;
+
 export const ApprovalSchema = z.object({
-  ranked_priorities: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+  decisions: z.array(DecisionAnswerSchema).max(20).optional(),
+  ranked_priorities: z
+    .array(z.string().trim().min(1).max(300))
+    .min(1)
+    .max(20)
+    .optional(),
   added_by_human: z.array(z.string()).optional(),
   removed_by_human: z.array(z.string()).optional(),
   notes: z.string().max(1000).optional(),

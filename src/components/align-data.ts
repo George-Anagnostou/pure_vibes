@@ -126,3 +126,98 @@ export const STATUS_LABEL: Record<string, string> = {
   rejected: "Rejected",
   expired: "Expired",
 };
+
+// ---- Decisions (current interview) ----
+
+export type UiOption = { option: string; tradeoff: string };
+export type UiDecision = {
+  topic: string;
+  question: string;
+  choice: string;
+  thinksYouWant: string;
+  why: string;
+  alternatives: UiOption[];
+  estTokens?: number;
+  estCostUsd?: number;
+  estTime?: string;
+  source?: string;
+};
+export type UiDecisionSuggestion = {
+  action: "challenge" | "add";
+  ref: number;
+  topic: string;
+  question: string;
+  recommend: string;
+  options: UiOption[];
+  why: string;
+};
+
+const readOptions = (v: Json | undefined): UiOption[] =>
+  Array.isArray(v)
+    ? v.flatMap((o) =>
+        isObject(o) && str(o.option)
+          ? [{ option: str(o.option), tradeoff: str(o.tradeoff) }]
+          : [],
+      )
+    : [];
+
+// review.stated holds decisions for current rows (older rows: steps/priorities, skipped).
+export function readDecisions(value: Json | undefined): UiDecision[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((d) => {
+    if (!isObject(d) || !str(d.topic) || !str(d.choice)) return [];
+    return [
+      {
+        topic: str(d.topic),
+        question: str(d.question),
+        choice: str(d.choice),
+        thinksYouWant: str(d.thinks_you_want),
+        why: str(d.why),
+        alternatives: readOptions(d.alternatives),
+        estTokens: num(d.est_tokens),
+        estCostUsd: num(d.est_cost_usd),
+        estTime: str(d.est_time) || undefined,
+        source: SOURCE_LABEL[str(d.source)],
+      },
+    ];
+  });
+}
+
+export function readDecisionSuggestions(
+  critique: Json | null,
+): UiDecisionSuggestion[] {
+  if (!isObject(critique) || !Array.isArray(critique.suggestions)) return [];
+  return critique.suggestions.flatMap((s) => {
+    if (!isObject(s)) return [];
+    const action = str(s.action);
+    if ((action !== "challenge" && action !== "add") || !str(s.recommend))
+      return [];
+    return [
+      {
+        action,
+        ref: typeof s.ref === "number" ? s.ref : 0,
+        topic: str(s.topic),
+        question: str(s.question),
+        recommend: str(s.recommend),
+        options: readOptions(s.options),
+        why: str(s.why),
+      },
+    ];
+  });
+}
+
+// contracts.decisions -> the final answers shown once a review is decided.
+export function readAnswers(value: Json | undefined) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((d) =>
+    isObject(d) && str(d.topic) && str(d.answer)
+      ? [
+          {
+            topic: str(d.topic),
+            answer: str(d.answer),
+            changed: d.changed === true,
+          },
+        ]
+      : [],
+  );
+}
