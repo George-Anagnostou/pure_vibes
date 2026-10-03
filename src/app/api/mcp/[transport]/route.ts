@@ -76,6 +76,12 @@ const reviewId = z.uuid().describe("review_id returned by align");
 const ALIGN_DESCRIPTION =
   "Glass Box interview: before you act, show the human what you think the task is and how you'll weigh trade-offs, so they can correct you. Call this BEFORE acting on any task with real choices (scope, data, cost, time, quality, risk), and again when your understanding changes. Send: `understanding` (what you think the task is: the goal, what success looks like, what's in and out of scope, in your words); `approach` (2-4 sentences); `priorities`: 4-10 things you're weighing, FORCE-RANKED highest first with no ties, each with why and source (request / instructions / rules / judgment / assumption); and optionally `decisions` you're making on their behalf (choice, what you think they want, alternatives with trade-offs, est tokens/$/time). Glass Box replies with real-world challenges that pit your priorities against each other: answer every one honestly with `answer_challenges` (what you'd actually do, which priority wins, whether you'd ask the human). Then a pop-up opens for the human; call get_contract until approved. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each decision and situation says, follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
 
+// Sent on initialize; clients such as Claude Code put this in the agent's
+// context, so agents added with a plain `claude mcp add` (no CLAUDE.md from the
+// agent kit) still know when to check in with the human.
+const SERVER_INSTRUCTIONS =
+  "Glass Box lets the human check how you're approaching a task before you act. Before acting on any task with real choices (scope, data sources, cost, time, quality, risk), call `align` with what you think the task is, your approach, your force-ranked priorities and the decisions you'd otherwise make silently. Answer every challenge it returns with `answer_challenges`. Then show the human the align_url in one line and call `get_contract` until it is approved; don't start the work before that. The approved contract is binding: follow ranked_priorities, decisions and instructions_from_human, and tell the human in one or two lines what changed. Call `checkpoint` before spending, deleting, contacting anyone or accessing anything new, and never perform an action it blocks. If a new significant decision comes up, call `align` again. Skip Glass Box only for trivial requests with no real choices.";
+
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
@@ -318,7 +324,10 @@ const handler = createMcpHandler(
       }),
     );
   },
-  { serverInfo: { name: "glass-box", version: "0.3.0" } },
+  {
+    serverInfo: { name: "glass-box", version: "0.3.0" },
+    instructions: SERVER_INSTRUCTIONS,
+  },
 );
 
 // Bearer header or ?key= query, clean 401 + WWW-Authenticate, and open CORS
