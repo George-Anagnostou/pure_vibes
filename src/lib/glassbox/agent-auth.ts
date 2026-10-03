@@ -12,11 +12,17 @@ export function newAgentKey() {
   return `gb_${randomBytes(24).toString("base64url")}`;
 }
 
-export async function requireAgent(request: Request) {
-  const key = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "")
-    .trim();
+export function bearerKey(request: Request): string | undefined {
+  return (
+    request.headers
+      .get("authorization")
+      ?.replace(/^Bearer\s+/i, "")
+      .trim() || undefined
+  );
+}
+
+// Resolves a raw gb_ key to its owner. Throws 401 HttpErrors with agent-facing messages.
+export async function verifyAgentKey(key: string | undefined) {
   if (!key?.startsWith("gb_"))
     throw new HttpError(
       401,
@@ -29,7 +35,11 @@ export async function requireAgent(request: Request) {
     .eq("key_hash", hashAgentKey(key))
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new HttpError(401, "Unknown Glass Box agent key.");
+  if (!data)
+    throw new HttpError(
+      401,
+      "Unknown Glass Box agent key. Mint a new one at /connect.",
+    );
   await admin
     .from("agent_keys")
     .update({ last_used_at: new Date().toISOString() })
@@ -40,4 +50,8 @@ export async function requireAgent(request: Request) {
     agentName: data.name,
     admin,
   };
+}
+
+export async function requireAgent(request: Request) {
+  return verifyAgentKey(bearerKey(request));
 }
