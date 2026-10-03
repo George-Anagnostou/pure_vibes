@@ -1,6 +1,6 @@
 # Shared development services
 
-- Website: https://pure-vibes-smoky.vercel.app
+- Website: https://glassbox.cards
 - Vercel: `georgeanagnostous-projects/pure-vibes`, GitHub production branch `master`.
 - Supabase: `pure_vibes`, ref `wfnplnspktwjywrfanrr`. Nick owns shared migrations.
 - Stripe: Vercel resource `stripe-sandbox-cerulean-ferry`, account `acct_1UMYkzGzm67ldhmK` (**sandbox only**).

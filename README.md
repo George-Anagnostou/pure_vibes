@@ -22,7 +22,7 @@ Run `npm run check`, `npm run format:check`, and `npm run build` before opening 
 
 ## Connect an agent to Glass Box
 
-Sign in at `<origin>/connect` (email magic link), mint an agent key (`gb_...`, shown once), and paste one of these. `<origin>` is the deployed app, e.g. `https://pure-vibes-smoky.vercel.app`; the `/connect` page fills in the origin and key for you.
+Sign in at `<origin>/connect` (email magic link), mint an agent key (`gb_...`, shown once), and paste one of these. `<origin>` is the deployed app, e.g. `https://glassbox.cards`; the `/connect` page fills in the origin and key for you.
 
 **Claude Code**
 
