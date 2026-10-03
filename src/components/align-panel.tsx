@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   readDecisions,
   readDecisionSuggestions,
+  readChallenges,
   readPrioritySuggestions,
   readStated,
   samePriority,
@@ -14,6 +15,7 @@ import {
   type Board,
   type BoardItem,
 } from "@/components/priority-board";
+import { ChallengeCards, type Ruling } from "@/components/challenge-cards";
 import {
   answerFor,
   buildCards,
@@ -118,6 +120,12 @@ export function AlignPanel({
     board.ranked.map((i) => i.id).join("|"),
   );
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const challenges = useMemo(() => readChallenges(review), [review]);
+  const [rulings, setRulings] = useState<Record<string, Ruling>>({});
+  const agentRanking = useMemo(
+    () => readStated(review.priorities).map((p) => p.name),
+    [review.priorities],
+  );
 
   function deletePriority(item: BoardItem) {
     setBoard((b) => ({
@@ -172,7 +180,12 @@ export function AlignPanel({
     const changed = card.agentChoice ? !same(answer, card.agentChoice) : true;
     return [{ card, answer, changed }];
   });
+  const overruled = challenges.filter(
+    (c) =>
+      rulings[c.id] && !rulings[c.id].approved && rulings[c.id].instead.trim(),
+  );
   const changes =
+    overruled.length +
     finalDecisions.filter((d) => d.changed).length +
     instructions.length +
     addedPriorities.length +
@@ -207,6 +220,17 @@ export function AlignPanel({
         added_by_human: addedPriorities,
         removed_by_human: removedPriorities,
         instructions,
+        challenges: challenges.map((c) => {
+          const r = rulings[c.id];
+          const overrule = !!r && !r.approved && !!r.instead.trim();
+          return {
+            id: c.id,
+            scenario: c.scenario,
+            agent_response: c.response ?? "",
+            approved: !overrule,
+            ...(overrule ? { instead: r.instead.trim() } : {}),
+          };
+        }),
       });
       setPhase({
         kind: "sent",
@@ -311,13 +335,35 @@ export function AlignPanel({
 
   return (
     <div className="space-y-5">
-      {approach && (
-        <section className="rounded-xl bg-paper px-3 py-2.5">
+      {review.understanding && (
+        <section className="rounded-xl border border-line bg-card px-3 py-2.5">
           <h2 className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
-            How it&apos;s approaching this
+            What it thinks the task is
           </h2>
-          <p className="mt-1 text-[14px] leading-snug">{approach}</p>
+          <p className="mt-1 text-[14px] leading-snug">
+            {review.understanding}
+          </p>
         </section>
+      )}
+
+      {approach && (
+        <details className="group rounded-xl bg-paper px-3 py-2.5">
+          <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
+            <span className="text-[11px] font-bold tracking-wide whitespace-nowrap text-ink-soft uppercase">
+              How it&apos;s approaching this
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft group-open:hidden">
+              {approach}
+            </span>
+            <span
+              aria-hidden
+              className="text-xs text-ink-soft transition-transform group-open:rotate-180"
+            >
+              ▾
+            </span>
+          </summary>
+          <p className="mt-1 text-[14px] leading-snug">{approach}</p>
+        </details>
       )}
 
       {(board.ranked.length > 0 || board.pool.length > 0) && (
@@ -341,29 +387,45 @@ export function AlignPanel({
         </section>
       )}
 
-      <section aria-labelledby={`dec-${review.id}`}>
-        <h2
-          id={`dec-${review.id}`}
-          className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
-        >
-          Decisions it&apos;s making for you
-        </h2>
-        <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
-          Keep its choice, pick another, or tell it what you actually want.
-        </p>
-        {cards.length ? (
+      {challenges.length > 0 && (
+        <section aria-labelledby={`ch-${review.id}`}>
+          <h2
+            id={`ch-${review.id}`}
+            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
+          >
+            How it would handle real situations
+          </h2>
+          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
+            Glass Box put these to the agent; each forces a trade-off between
+            its priorities. Confirm its answer or tell it what to do instead.
+          </p>
+          <ChallengeCards
+            challenges={challenges}
+            ranked={agentRanking}
+            rulings={rulings}
+            onRule={(id, r) => setRulings((prev) => ({ ...prev, [id]: r }))}
+          />
+        </section>
+      )}
+
+      {cards.length > 0 && (
+        <section aria-labelledby={`dec-${review.id}`}>
+          <h2
+            id={`dec-${review.id}`}
+            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
+          >
+            Decisions it&apos;s making for you
+          </h2>
+          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
+            Keep its choice, pick another, or tell it what you actually want.
+          </p>
           <DecisionCards
             cards={cards}
             answers={answers}
             onAnswer={(key, a) => setAnswers((prev) => ({ ...prev, [key]: a }))}
           />
-        ) : (
-          <p className="rounded-xl border-2 border-dashed border-line p-4 text-sm text-ink-soft">
-            The agent didn&apos;t list any decisions. Tell it what you want
-            below.
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
       <ExtraInstructions items={instructions} onChange={setInstructions} />
 

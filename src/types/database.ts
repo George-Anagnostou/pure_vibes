@@ -17,11 +17,11 @@ export type ProfileRow = { user_id: string; dials: Json; hard_lines: Json; ranke
 export type AgentKeyRow = { id: string; user_id: string; name: string; key_hash: string; created_at: string; last_used_at: string | null };
 export type ReviewRow = {
   id: string; user_id: string; agent_name: string; task: string; plan: string;
-  stated: Json; priorities: Json; revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
+  stated: Json; priorities: Json; understanding: string | null; challenge_answers: Json; answered_at: string | null; revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
 };
 export type ContractRow = {
   id: string; review_id: string; user_id: string; ranked_priorities: Json; dials: Json; hard_lines: Json;
-  budget_cents: number; plan_guidance: string | null; notes: string | null; added_by_human: Json; removed_by_human: Json; decisions: Json; created_at: string;
+  budget_cents: number; plan_guidance: string | null; notes: string | null; added_by_human: Json; removed_by_human: Json; decisions: Json; challenges: Json; created_at: string;
 };
 export type EventRow = { id: string; review_id: string; user_id: string; type: string; action: string; detail: Json; created_at: string };
 export type SpendRow = {

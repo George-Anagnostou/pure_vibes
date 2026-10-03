@@ -39,6 +39,9 @@ export type AlignReview = {
   status: string;
   stated: Json;
   priorities?: Json;
+  understanding?: string | null;
+  challenge_answers?: Json;
+  answered_at?: string | null;
   critique: Json | null;
   created_at: string;
 };
@@ -256,6 +259,53 @@ export function readPrioritySuggestions(
         ref: typeof s.ref === "number" ? s.ref : 0,
         name,
         why: str(s.why),
+      },
+    ];
+  });
+}
+
+// ---- Challenges (the interview) ----
+export type UiChallenge = {
+  id: string;
+  scenario: string;
+  tests: string[];
+  whyItMatters: string;
+  response?: string;
+  favors?: string;
+  wouldAsk?: boolean;
+};
+
+const challengesOf = (critique: Json | null) =>
+  isObject(critique) && Array.isArray(critique.challenges)
+    ? critique.challenges
+    : [];
+
+// Ready for the human when the agent has answered its challenges, or there were none.
+export function isReady(review: Pick<AlignReview, "critique" | "answered_at">) {
+  return !!review.answered_at || challengesOf(review.critique).length === 0;
+}
+
+export function readChallenges(review: AlignReview): UiChallenge[] {
+  const answers = Array.isArray(review.challenge_answers)
+    ? review.challenge_answers
+    : [];
+  return challengesOf(review.critique).flatMap((c) => {
+    if (!isObject(c) || !str(c.scenario)) return [];
+    const id = str(c.id);
+    const a = answers.find((x) => isObject(x) && str(x.id) === id);
+    return [
+      {
+        id,
+        scenario: str(c.scenario),
+        tests: readStrings(c.tests),
+        whyItMatters: str(c.why_it_matters),
+        ...(isObject(a)
+          ? {
+              response: str(a.response),
+              favors: str(a.favors),
+              wouldAsk: a.would_ask_human === true,
+            }
+          : {}),
       },
     ];
   });
