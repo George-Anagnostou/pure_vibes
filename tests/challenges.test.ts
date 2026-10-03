@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { sanitizeChallenges } from "@/lib/glassbox/llm";
 
 const priorities = [
-  { name: "Completeness" },
-  { name: "Accuracy" },
-  { name: "Finish in one pass" },
-  { name: "Low cost" },
-];
+  "Completeness",
+  "Accuracy",
+  "Finish in one pass",
+  "Low cost",
+].map((name) => ({ name, why: "" }));
 const challenge = (
   priority_numbers: number[],
   tests: string[],
