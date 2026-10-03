@@ -1088,6 +1088,9 @@
    horizon, with slow-drifting blurred cloud forms behind the glass. */
 .page {
   position: relative;
+  /* New stacking context so the cloud layer (z-index -1) stays above the
+     sky background but below every piece of content on every page. */
+  isolation: isolate;
   background: linear-gradient(
     180deg,
     #afc9ee 0%,
@@ -1102,7 +1105,7 @@
   content: "";
   position: fixed;
   inset: -25%;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background:
     radial-gradient(
