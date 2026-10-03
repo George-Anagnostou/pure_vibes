@@ -1,0 +1,8 @@
+node_modules
+.next
+package-lock.json
+next-env.d.ts
+coverage
+src/types/database.ts
+.impeccable
+supabase/.temp

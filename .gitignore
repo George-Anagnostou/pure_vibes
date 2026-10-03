@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+coverage/
+.env*
+!.env.example
+.vercel/
+*.tsbuildinfo
+.DS_Store
+supabase/.temp/
+supabase/.branches/
+.impeccable/
