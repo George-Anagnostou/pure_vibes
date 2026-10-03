@@ -372,7 +372,7 @@ export function AlignPanel({
             Your priorities
           </h2>
           <p className={styles.cardHint}>
-            Drag to reorder — #1 wins every conflict. Tap a tile to remove it.
+            Drag to reorder. #1 wins every conflict. Tap a tile to remove it.
           </p>
           {board.ranked.length ? (
             <RankedPriorities
@@ -430,9 +430,7 @@ export function AlignPanel({
 
       <aside className={styles.sideSticky}>
         <div className={styles.optCard}>
-          <p className={styles.optCardTitle}>
-            Additional optional values you may add
-          </p>
+          <p className={styles.optCardTitle}>Worth adding</p>
           <div className={styles.optList}>
             {board.pool.length === 0 && (
               <p className={local.empty}>

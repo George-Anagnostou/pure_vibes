@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ResumeAfterSignIn, SignOutButton } from "@/components/session-actions";
 import { SignInForm } from "@/components/sign-in-form";
+import styles from "@/components/glassbox/glassbox.module.css";
+import { Shell } from "@/components/glassbox/shell";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -36,66 +38,73 @@ export default async function Home({
   const { email, failed } = await currentEmail();
 
   return (
-    <main className="mx-auto max-w-lg px-4 pt-12 pb-16">
-      <h1 className="text-3xl leading-tight font-black tracking-tight sm:text-4xl">
-        Before your agent acts, it checks what you actually care about.
-      </h1>
-      <p className="mt-3 text-lg text-ink-soft">
-        Your agent shares its priorities. You put them in order. It follows your
-        order.
-      </p>
-
-      {params.auth === "error" && (
-        <p
-          role="alert"
-          className="mt-6 rounded-xl bg-stop-bg p-4 font-semibold text-stop"
-        >
-          That sign-in link could not be verified. Request another and open it
-          in this browser.
+    <Shell minimal={!email}>
+      <main className={styles.onboardShell}>
+        <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
+          See how your AI <em>really</em> works
+        </h1>
+        <p className={styles.agentName}>
+          Your agent shares its plan. You set the priorities. It follows them.
         </p>
-      )}
-      {failed && (
-        <p
-          role="alert"
-          className="mt-6 rounded-xl bg-warn-bg p-4 font-semibold text-warn"
-        >
-          Can&apos;t reach the server right now. Refresh in a moment.
-        </p>
-      )}
 
-      <section className="mt-8">
+        {params.auth === "error" && (
+          <p
+            role="alert"
+            className={styles.alertCard}
+            style={{ marginBottom: 16 }}
+          >
+            That sign-in link could not be verified. Request another and open it
+            in this browser.
+          </p>
+        )}
+        {failed && (
+          <p
+            role="alert"
+            className={styles.alertCard}
+            style={{ marginBottom: 16 }}
+          >
+            Can&apos;t reach the server right now. Refresh in a moment.
+          </p>
+        )}
+
         {email ? (
           <>
             <ResumeAfterSignIn />
-            <Link
-              href="/inbox"
-              className="block rounded-xl bg-ink px-5 py-4 text-center text-lg font-bold text-white hover:bg-ink/85"
+            <div className={styles.sideSticky}>
+              <div className={styles.submitBar} style={{ marginTop: 0 }}>
+                <Link
+                  href="/dashboard"
+                  className={`${styles.submit} ${styles.submitLink}`}
+                >
+                  Open your dashboard
+                </Link>
+              </div>
+              <Link
+                href="/connect"
+                className={`${styles.btnSecondary} ${styles.btnSecondaryLink}`}
+              >
+                Connect an agent
+              </Link>
+            </div>
+            <p
+              className={styles.agentName}
+              style={{ marginTop: 20, marginBottom: 0 }}
             >
-              Open your inbox
-            </Link>
-            <Link
-              href="/connect"
-              className="mt-3 block rounded-xl border-2 border-ink px-5 py-3 text-center font-bold hover:bg-card"
-            >
-              Connect an agent
-            </Link>
-            <p className="mt-3 text-center text-sm text-ink-soft">
               Signed in as {email} · <SignOutButton />
             </p>
           </>
         ) : (
           <>
-            <SignInForm nextPath="/connect" />
-            <p className="mt-3 text-sm text-ink-soft">
-              New here? Sign in with your email, then{" "}
-              <Link href="/connect" className="font-semibold underline">
-                connect your agent
-              </Link>{" "}
-              (Claude Code, Cursor or any MCP client).
+            <div className={styles.onboardCard}>
+              <SignInForm nextPath="/dashboard" />
+            </div>
+            <p className={styles.agentName} style={{ marginBottom: 0 }}>
+              New here? Sign in with your email, then connect your agent —
+              Claude Code, Cursor or any MCP client.
             </p>
           </>
         )}
-      </section>
-    </main>
+      </main>
+    </Shell>
   );
 }

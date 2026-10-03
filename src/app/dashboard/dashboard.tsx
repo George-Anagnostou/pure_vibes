@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -8,14 +9,31 @@ import {
   type AlignReview,
 } from "@/components/align-data";
 import { AlignPanel } from "@/components/align-panel";
-import { glassboxFonts } from "@/components/glassbox/fonts";
 import { ConnectAgent } from "@/components/connect-agent";
+import styles from "@/components/glassbox/glassbox.module.css";
+import { glassboxFonts } from "@/components/glassbox/fonts";
 import { createClient } from "@/lib/supabase/client";
 import { useNotificationPermission } from "./use-notification-permission";
 
 type Live = "connecting" | "live" | "offline";
 
-const TITLE = "Inbox · Glass Box";
+const TITLE = "Dashboard · Glass Box";
+
+const TOOLS = [
+  { label: "Apple Intelligence", src: "/tools/apple-intelligence-02.svg" },
+  { label: "Perplexity", src: "/tools/perplexity.svg" },
+  { label: "Siri", src: "/tools/apple-intelligence-04.svg" },
+  { label: "Grok", src: "/tools/grok.svg" },
+  { label: "Claude", src: "/tools/claude.svg" },
+  { label: "ChatGPT", src: "/tools/chatgpt.svg" },
+];
+
+const PILL_CLASS: Record<string, string> = {
+  pending: styles.pillPending,
+  approved: styles.pillApproved,
+  rejected: styles.pillRejected,
+  expired: styles.pillExpired,
+};
 
 function upsert(list: AlignReview[], row: AlignReview) {
   const existing = list.find((r) => r.id === row.id);
@@ -25,9 +43,10 @@ function upsert(list: AlignReview[], row: AlignReview) {
     .slice(0, 50);
 }
 
-// Always-open page: new agent requests pop up as a sheet (plus a browser
-// notification when the tab is in the background).
-export function Inbox(props: {
+// Signed-in home: start a project by connecting a tool, prior projects on
+// the right. Keeps the always-open inbox behaviour — new agent requests
+// pop up as a sheet (plus a browser notification in the background).
+export function Dashboard(props: {
   userId: string;
   initialReviews: AlignReview[];
 }) {
@@ -125,92 +144,107 @@ export function Inbox(props: {
   }, []);
 
   const active = reviews.find((r) => r.id === activeId) ?? null;
-  const pending = reviews.filter((r) => r.status === "pending").length;
+  const waiting = reviews.filter((r) => r.status === "pending").length;
 
   return (
-    <main className="mx-auto max-w-lg px-4 pt-6 pb-16">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-black tracking-tight">Inbox</h1>
-        <LiveDot live={live} />
-      </div>
-      <p className="mt-1 text-ink-soft">
-        Keep this open. When an agent asks about its priorities, it pops up
-        here.
-      </p>
+    <main className={styles.alignShell}>
+      <div className={styles.homeGrid}>
+        <div className={styles.homeHead}>
+          <h1 className={styles.homeHeader}>
+            Let&apos;s get started with a new project
+          </h1>
+          <LiveLine live={live} waiting={waiting} />
+        </div>
 
-      {permission === "default" && (
-        <button
-          type="button"
-          onClick={requestPermission}
-          className="mt-4 w-full rounded-xl border-2 border-ink px-4 py-3 text-left font-bold hover:bg-card"
-        >
-          Turn on notifications
-          <span className="block text-sm font-normal text-ink-soft">
-            So you hear about requests when this tab is in the background.
-          </span>
-        </button>
-      )}
-      {permission === "denied" && (
-        <p className="mt-4 text-sm text-ink-soft">
-          Notifications are blocked for this site. Requests still pop up here.
-        </p>
-      )}
+        <div className={styles.homeMain} style={{ marginTop: 16 }}>
+          <div className={styles.connectCard}>
+            <p className={styles.connectLabel}>Connect your agents</p>
+            <div className={styles.toolRow} aria-hidden>
+              {TOOLS.map((t) => (
+                <Image
+                  key={t.src}
+                  src={t.src}
+                  alt=""
+                  title={t.label}
+                  width={40}
+                  height={40}
+                />
+              ))}
+            </div>
+            <ConnectAgent />
+            {permission === "default" && (
+              <p style={{ margin: "14px 0 0" }}>
+                <button
+                  type="button"
+                  onClick={requestPermission}
+                  className={styles.mutedLink}
+                >
+                  Turn on notifications
+                </button>{" "}
+                <span className={styles.smallBody}>
+                  — so you hear about requests when this tab is in the
+                  background.
+                </span>
+              </p>
+            )}
+            {permission === "denied" && (
+              <p className={styles.smallBody} style={{ margin: "14px 0 0" }}>
+                Notifications are blocked for this site. Requests still pop up
+                here.
+              </p>
+            )}
+          </div>
+        </div>
 
-      <section className="mt-8" aria-labelledby="recent-h">
-        <h2
-          id="recent-h"
-          className="text-sm font-bold tracking-wide text-ink-soft uppercase"
-        >
-          Recent requests{pending ? ` · ${pending} waiting` : ""}
-        </h2>
-        {reviews.length === 0 ? (
-          <p className="mt-3 rounded-xl border-2 border-dashed border-line p-6 text-center text-ink-soft">
-            Nothing yet. Connect an agent below, then ask it to do something.
+        <div className={styles.homeSide} style={{ marginTop: 16 }}>
+          <p className={styles.projectsTitle}>
+            Prior Projects{waiting ? ` · ${waiting} waiting` : ""}
           </p>
-        ) : (
-          <ul className="mt-3 divide-y divide-line rounded-xl border border-line bg-card">
-            {reviews.map((r) => (
-              <li key={r.id} className="flex items-center gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{r.task}</p>
-                  <p className="text-sm text-ink-soft">
-                    {r.agent_name} ·{" "}
-                    {new Date(r.created_at).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-                {r.status === "pending" ? (
+          {reviews.length === 0 ? (
+            <div className={styles.optCard}>
+              <p className={styles.smallBody} style={{ margin: 0 }}>
+                Nothing yet. Connect an agent, then ask it to do something — its
+                request shows up here.
+              </p>
+            </div>
+          ) : (
+            <div className={styles.projectList}>
+              {reviews.map((r) =>
+                r.status === "pending" ? (
                   <button
+                    key={r.id}
                     type="button"
                     onClick={() => setActiveId(r.id)}
-                    className="shrink-0 rounded-lg bg-ink px-3 py-2 text-sm font-bold text-white"
+                    className={`${styles.projectTile} ${styles.projectTileButton}`}
                   >
-                    Review
+                    <ProjectBody review={r} />
+                    <span className={`${styles.pill} ${styles.pillPending}`}>
+                      {STATUS_LABEL.pending}
+                    </span>
                   </button>
                 ) : (
                   <Link
+                    key={r.id}
                     href={`/align/${r.id}`}
-                    className="shrink-0 rounded-full bg-paper px-3 py-1 text-xs font-semibold text-ink-soft hover:text-ink"
+                    className={styles.reviewLink}
                   >
-                    {STATUS_LABEL[r.status] ?? r.status}
+                    <span className={styles.projectTile}>
+                      <ProjectBody review={r} />
+                      <span
+                        className={`${styles.pill} ${
+                          PILL_CLASS[r.status] ?? styles.pillExpired
+                        }`}
+                      >
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
+                    </span>
                   </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <details className="mt-8 rounded-xl border border-line bg-card">
-        <summary className="cursor-pointer p-4 font-semibold">
-          Connect an agent
-        </summary>
-        <div className="px-4 pb-4">
-          <ConnectAgent />
+                ),
+              )}
+            </div>
+          )}
         </div>
-      </details>
+      </div>
 
       {active && (
         <RequestSheet
@@ -222,6 +256,53 @@ export function Inbox(props: {
         />
       )}
     </main>
+  );
+}
+
+function ProjectBody({ review }: { review: AlignReview }) {
+  return (
+    <span className={styles.projectBody}>
+      <span className={styles.projectDate} suppressHydrationWarning>
+        {new Date(review.created_at).toLocaleDateString(undefined, {
+          month: "long",
+          day: "numeric",
+        })}{" "}
+        · {review.agent_name}
+      </span>
+      <span
+        className={styles.projectName}
+        style={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {review.task}
+      </span>
+    </span>
+  );
+}
+
+function LiveLine({ live, waiting }: { live: Live; waiting: number }) {
+  const dot =
+    live === "live"
+      ? styles.feedDot
+      : live === "offline"
+        ? `${styles.feedDot} ${styles.feedDotBreach}`
+        : `${styles.feedDot} ${styles.feedDotDrift}`;
+  const label =
+    live === "live"
+      ? waiting
+        ? `Listening — ${waiting} request${waiting === 1 ? "" : "s"} waiting`
+        : "Listening for your agents"
+      : live === "offline"
+        ? "Offline — refresh"
+        : "Connecting…";
+  return (
+    <p className={styles.liveRow} style={{ marginTop: -16 }}>
+      <span className={dot} />
+      {label}
+    </p>
   );
 }
 
@@ -280,26 +361,5 @@ function RequestSheet({
         </div>
       </div>
     </div>
-  );
-}
-
-function LiveDot({ live }: { live: Live }) {
-  const tone =
-    live === "live"
-      ? "bg-go"
-      : live === "offline"
-        ? "bg-stop"
-        : "bg-warn-strong";
-  const label =
-    live === "live"
-      ? "Listening"
-      : live === "offline"
-        ? "Offline — refresh"
-        : "Connecting…";
-  return (
-    <span className="flex items-center gap-2 text-sm text-ink-soft">
-      <span className={`size-2.5 rounded-full ${tone}`} />
-      {label}
-    </span>
   );
 }

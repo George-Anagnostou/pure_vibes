@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 const KEY_PLACEHOLDER = "gb_YOUR_KEY";
 
-type MintState =
+export type MintState =
   | { kind: "idle" }
   | { kind: "busy" }
   | { kind: "done"; key: string; name: string }
@@ -26,7 +27,7 @@ async function mintKey(name: string): Promise<string> {
   return body.key;
 }
 
-function useMint(onMinted?: () => void) {
+export function useMint(onMinted?: () => void) {
   const [state, setState] = useState<MintState>({ kind: "idle" });
   async function mint(name: string) {
     setState({ kind: "busy" });
@@ -131,7 +132,7 @@ export function setupSnippets(origin: string, key: string) {
   ];
 }
 
-function CopyBlock({ code }: { code: string }) {
+export function CopyBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative">
@@ -157,7 +158,7 @@ function CopyBlock({ code }: { code: string }) {
   );
 }
 
-function MintForm({
+export function MintForm({
   state,
   onMint,
 }: {
@@ -172,24 +173,21 @@ function MintForm({
           event.preventDefault();
           onMint(name);
         }}
-        className="flex gap-2"
+        className={styles.inlineForm}
       >
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={100}
           aria-label="Agent name"
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-paper px-3 outline-none focus:border-ink"
+          className={styles.fieldInput}
         />
-        <button
-          disabled={state.kind === "busy"}
-          className="min-h-11 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-60"
-        >
+        <button disabled={state.kind === "busy"} className={styles.btnDark}>
           {state.kind === "busy" ? "Creating…" : "Mint key"}
         </button>
       </form>
       {state.kind === "error" && (
-        <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+        <p role="alert" className={styles.alertCard} style={{ marginTop: 8 }}>
           {state.message}
         </p>
       )}
@@ -197,26 +195,52 @@ function MintForm({
   );
 }
 
-// Compact version for the inbox: mint a key, get the Claude Code command.
+export function MintedKeyNotice({
+  name,
+  keyValue,
+}: {
+  name: string;
+  keyValue: string;
+}) {
+  return (
+    <div role="status" className={styles.warnCard} style={{ marginTop: 12 }}>
+      <p style={{ margin: 0, fontWeight: 600 }}>
+        Copy “{name}” now — this is the only time it is shown.
+      </p>
+      <div style={{ marginTop: 8 }}>
+        <CopyBlock code={keyValue} />
+      </div>
+      <p style={{ margin: "8px 0 0" }}>
+        Anyone with this key can ask you for approvals as your agent. Keep it
+        out of git; revoke it on Connect if it leaks.
+      </p>
+    </div>
+  );
+}
+
+// Compact connect block for the dashboard: mint a key, paste one block.
 export function ConnectAgent() {
   const { state, mint } = useMint();
   return (
     <div>
-      <p className="text-sm text-ink-soft">
-        Mint a key, then paste the block into your agent. The key is shown once.
-        Cursor, other MCP clients and the REST API are on{" "}
-        <Link href="/connect" className="font-semibold underline">
+      <p className={styles.smallBody}>
+        Mint a key, then paste the block into your agent. The key is shown
+        once. Cursor, other MCP clients and the REST API are on{" "}
+        <Link href="/connect" className={styles.mutedLink}>
           Connect
         </Link>
         .
       </p>
-      <div className="mt-3">
+      <div style={{ marginTop: 12 }}>
         <MintForm state={state} onMint={mint} />
       </div>
       {state.kind === "done" && (
-        <div className="mt-3">
-          <CopyBlock code={agentPrompt(window.location.origin, state.key)} />
-        </div>
+        <>
+          <MintedKeyNotice name={state.name} keyValue={state.key} />
+          <div style={{ marginTop: 12 }}>
+            <CopyBlock code={agentPrompt(window.location.origin, state.key)} />
+          </div>
+        </>
       )}
     </div>
   );
@@ -233,71 +257,59 @@ export function AgentSetup({
   const { state, mint } = useMint(onMinted);
   const key = state.kind === "done" ? state.key : KEY_PLACEHOLDER;
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">1. Mint an agent key</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          One key per agent or machine. Name it so you can recognize and revoke
-          it later.
+    <div style={{ display: "grid", gap: 16 }}>
+      <section className={styles.optCard}>
+        <h2 className={styles.connectLabel}>1. Mint an agent key</h2>
+        <p className={styles.smallBody} style={{ margin: "0 0 12px" }}>
+          One key per agent or machine. Name it so you can recognize and
+          revoke it later.
         </p>
-        <div className="mt-3">
-          <MintForm state={state} onMint={mint} />
-        </div>
+        <MintForm state={state} onMint={mint} />
         {state.kind === "done" && (
-          <div
-            role="status"
-            className="mt-3 rounded-xl bg-warn-bg p-3 text-sm text-warn"
-          >
-            <p className="font-bold">
-              Copy “{state.name}” now: this is the only time it is shown.
-            </p>
-            <div className="mt-2">
-              <CopyBlock code={state.key} />
-            </div>
-            <p className="mt-2">
-              Anyone with this key can ask you for approvals as your agent. Keep
-              it out of git; revoke it below if it leaks.
-            </p>
-          </div>
+          <MintedKeyNotice name={state.name} keyValue={state.key} />
         )}
       </section>
 
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">2. Connect your agent</h2>
-        <p className="mt-1 text-sm text-ink-soft">
+      <section className={styles.optCard}>
+        <h2 className={styles.connectLabel}>2. Connect your agent</h2>
+        <p className={styles.smallBody} style={{ margin: "0 0 4px" }}>
           MCP endpoint{" "}
-          <code className="rounded bg-paper px-1 font-mono text-xs">
+          <code className="rounded bg-white/60 px-1 font-mono text-xs">
             {origin}/api/mcp/mcp
           </code>
           {state.kind !== "done" && (
             <>
               {" "}
               · snippets show{" "}
-              <code className="font-mono text-xs">{KEY_PLACEHOLDER}</code> until
-              you mint a key
+              <code className="font-mono text-xs">{KEY_PLACEHOLDER}</code>{" "}
+              until you mint a key
             </>
           )}
         </p>
-        <div className="mt-4 space-y-5">
+        <div style={{ display: "grid", gap: 18, marginTop: 14 }}>
           {setupSnippets(origin, key).map((s) => (
             <div key={s.id}>
-              <h3 className="font-bold">{s.title}</h3>
-              <p className="mb-2 text-sm text-ink-soft">{s.hint}</p>
+              <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600 }}>
+                {s.title}
+              </h3>
+              <p className={styles.smallBody} style={{ margin: "2px 0 8px" }}>
+                {s.hint}
+              </p>
               <CopyBlock code={s.code} />
             </div>
           ))}
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">3. Give it a task</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Before acting, your agent calls <code>align</code> with its approach.
-          You get a pop-up (or a link in your{" "}
-          <Link href="/inbox" className="font-semibold underline">
-            inbox
-          </Link>
-          ) to correct the decisions it is making for you, and it follows what
+      <section className={styles.optCard}>
+        <h2 className={styles.connectLabel}>3. Give it a task</h2>
+        <p className={styles.smallBody} style={{ margin: 0 }}>
+          Before acting, your agent calls <code>align</code> with its
+          approach. You get a pop-up on your{" "}
+          <Link href="/dashboard" className={styles.mutedLink}>
+            dashboard
+          </Link>{" "}
+          to correct the decisions it is making for you, and it follows what
           you approve. In Claude Code you can also type{" "}
           <code>/mcp__glassbox__align</code> to make it realign.
         </p>

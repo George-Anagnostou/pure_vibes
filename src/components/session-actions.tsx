@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { safeNextPath } from "@/lib/auth-navigation";
 import { NEXT_PATH_KEY } from "@/components/sign-in-form";
+import styles from "@/components/glassbox/glassbox.module.css";
 
 // After a magic-link sign-in lands on "/", continue to the page that asked.
 export function ResumeAfterSignIn() {
@@ -26,7 +27,7 @@ export function SignOutButton() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
-    <span className="inline-flex items-center gap-3">
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
       <button
         type="button"
         disabled={busy}
@@ -43,12 +44,12 @@ export function SignOutButton() {
             setBusy(false);
           }
         }}
-        className="text-sm font-semibold text-ink-soft underline underline-offset-4 hover:text-ink disabled:opacity-60"
+        className={styles.mutedLink}
       >
         {busy ? "Signing out…" : "Sign out"}
       </button>
       {error && (
-        <span role="alert" className="text-sm text-stop">
+        <span role="alert" style={{ color: "#c81e1e", fontSize: "0.78rem" }}>
           {error}
         </span>
       )}

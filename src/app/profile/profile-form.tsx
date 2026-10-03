@@ -2,13 +2,19 @@
 
 import { useState, type FormEvent } from "react";
 import { samePriority } from "@/components/align-data";
-import { RankList, type RankItem } from "@/components/rank-list";
+import styles from "@/components/glassbox/glassbox.module.css";
+import { RankedPriorities } from "@/components/glassbox/ranked-priorities";
+import type { BoardItem } from "@/components/priority-board";
 import { DEFAULT_DIALS, DEFAULT_HARD_LINES } from "@/lib/glassbox/types";
 import { createClient } from "@/lib/supabase/client";
 import type { Json } from "@/types/database";
 
 // Names are unique (adds are de-duplicated), so they double as stable ids.
-const toItem = (name: string): RankItem => ({ id: name, name });
+const toItem = (name: string): BoardItem => ({
+  id: name,
+  name,
+  origin: "human",
+});
 const dedupe = (names: string[]) =>
   names.filter((n, i) => !names.slice(0, i).some((m) => samePriority(m, n)));
 
@@ -17,7 +23,7 @@ export function ProfileForm(props: {
   // Saved alongside the order; passed through unchanged.
   profile: { dials: Json; hard_lines: Json; budget_cents: number } | null;
 }) {
-  const [items, setItems] = useState(() =>
+  const [items, setItems] = useState<BoardItem[]>(() =>
     dedupe(props.initialRanked).map(toItem),
   );
   const [draft, setDraft] = useState("");
@@ -28,7 +34,7 @@ export function ProfileForm(props: {
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
-  const change = (next: RankItem[]) => {
+  const change = (next: BoardItem[]) => {
     setItems(next);
     setStatus({ kind: "idle" });
   };
@@ -62,52 +68,58 @@ export function ProfileForm(props: {
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: "grid", gap: 16 }}>
       {items.length ? (
-        <RankList
+        <RankedPriorities
           items={items}
           onChange={change}
-          onRemove={(id) => change(items.filter((i) => i.id !== id))}
-          minItems={0}
+          onRemove={(item) => change(items.filter((i) => i.id !== item.id))}
         />
       ) : (
-        <p className="rounded-xl border-2 border-dashed border-line p-5 text-ink-soft">
-          Nothing saved yet. Add what usually matters to you, like Price or
-          Privacy.
-        </p>
+        <div className={styles.optCard}>
+          <p className={styles.smallBody} style={{ margin: 0 }}>
+            Nothing saved yet. Add what usually matters to you, like Price or
+            Privacy.
+          </p>
+        </div>
       )}
-      <form onSubmit={add} className="flex gap-2">
+      <form onSubmit={add} className={styles.inlineForm}>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Add a priority"
           maxLength={100}
           aria-label="Add a priority"
-          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-card px-3 outline-none focus:border-ink"
+          className={styles.fieldInput}
         />
-        <button
-          disabled={!draft.trim()}
-          className="min-h-11 rounded-xl border-2 border-ink px-4 font-bold disabled:opacity-40"
-        >
+        <button disabled={!draft.trim()} className={styles.btnDark}>
           Add
         </button>
       </form>
-      <div className="flex flex-wrap items-center gap-4 pt-2">
+      <div>
         <button
           type="button"
           onClick={save}
           disabled={status.kind === "saving"}
-          className="min-h-12 rounded-xl bg-ink px-6 font-bold text-white hover:bg-ink/85 disabled:opacity-60"
+          className={styles.submit}
         >
-          {status.kind === "saving" ? "Saving…" : "Save"}
+          {status.kind === "saving" ? "Saving…" : "Save defaults"}
         </button>
         {status.kind === "saved" && (
-          <p role="status" className="font-semibold text-go">
-            Saved.
+          <p
+            role="status"
+            className={styles.statusCard}
+            style={{ marginTop: 10 }}
+          >
+            Saved. Agents start from this.
           </p>
         )}
         {status.kind === "error" && (
-          <p role="alert" className="font-semibold text-stop">
+          <p
+            role="alert"
+            className={styles.alertCard}
+            style={{ marginTop: 10 }}
+          >
             {status.message}
           </p>
         )}

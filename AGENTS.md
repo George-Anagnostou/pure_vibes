@@ -283,3 +283,13 @@ Do not force-remove a worktree or delete a branch with uncommitted/unmerged work
 - Run `npm run check`, `npm run format:check`, and `npm run build`. For schema changes, also run `npm run db:test` with local Supabase.
 - State which external integrations were actually tested. A successful build or mocked test does not verify live accounts.
 - Preserve the team's product decisions; the action-plan workflow and individual accounts are replaceable scaffold defaults.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

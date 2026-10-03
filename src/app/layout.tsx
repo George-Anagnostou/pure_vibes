@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { SiteNav } from "@/components/site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,15 +13,14 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
 
+// Pages wrap themselves in the glassbox <Shell> (frosted TopBar + sky),
+// so the layout stays bare.
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-dvh">
-        <SiteNav />
-        {children}
-      </body>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }
