@@ -10,10 +10,31 @@ import {
 import { AlignPanel, FinalDecisions } from "@/components/align-panel";
 import { WaitingForAgent } from "@/components/waiting-for-agent";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
+import styles from "@/components/glassbox/glassbox.module.css";
+import local from "@/components/glassbox/align.module.css";
+import { glassboxFonts } from "@/components/glassbox/fonts";
+import { TopBar } from "@/components/glassbox/top-bar";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Glass Box" };
+
+// Headline voice from DESIGN.md: "Here is how i will approach [prompt summary]."
+// The summary is the task's first sentence, quoted, so imperatives read naturally.
+function summarize(task: string) {
+  const first = task.trim().split(/(?<=[.!?])\s/)[0] ?? task;
+  const short = first.length > 90 ? `${first.slice(0, 87).trimEnd()}…` : first;
+  return short.replace(/[.!?]$/, "");
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={`${styles.page} ${glassboxFonts}`}>
+      <TopBar />
+      {children}
+    </div>
+  );
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,11 +50,13 @@ export default async function AlignPage({
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user)
     return (
-      <SignInGate
-        nextPath={`/align/${id}`}
-        title="An agent is waiting on you"
-        body="Sign in to check its priorities before it goes ahead."
-      />
+      <Shell>
+        <SignInGate
+          nextPath={`/align/${id}`}
+          title="An agent is waiting on you"
+          body="Sign in to check its priorities before it goes ahead."
+        />
+      </Shell>
     );
 
   const { data: review, error } = await supabase
@@ -45,10 +68,12 @@ export default async function AlignPage({
     .maybeSingle();
   if (error)
     return (
-      <ErrorCard
-        title="Could not load this request"
-        body="The database did not respond. Refresh to try again."
-      />
+      <Shell>
+        <ErrorCard
+          title="Could not load this request"
+          body="The database did not respond. Refresh to try again."
+        />
+      </Shell>
     );
   if (!review) notFound();
 
@@ -57,53 +82,65 @@ export default async function AlignPage({
       ? (
           await supabase
             .from("contracts")
-            .select("decisions, added_by_human, challenges")
+            .select("decisions, ranked_priorities, notes, challenges")
             .eq("review_id", id)
             .maybeSingle()
         ).data
       : null;
 
   return (
-    <main className="mx-auto max-w-lg px-4 pt-6 pb-16">
-      <p className="text-lg leading-snug [overflow-wrap:anywhere]">
-        <strong className="font-black">{review.agent_name}</strong> is about to:{" "}
-        {review.task}
-      </p>
+    <Shell>
+      <div className={`${styles.alignShell} ${local.wideShell}`}>
+        <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
+          Here is how <em>i</em> will approach “{summarize(review.task)}”
+        </h1>
+        <p className={`${styles.agentName} [overflow-wrap:anywhere]`}>
+          {review.agent_name}
+          {summarize(review.task) !== review.task.trim() &&
+            ` · “${review.task.trim()}”`}
+        </p>
 
-      <div className="mt-6">
         {review.status === "pending" && !isReady(review) ? (
           <WaitingForAgent agentName={review.agent_name} />
         ) : review.status === "pending" ? (
           <AlignPanel review={review} />
         ) : (
-          <section className="space-y-4">
-            <p className="inline-block rounded-full bg-ink px-3 py-1 text-xs font-bold text-white">
+          <section className={styles.confirm}>
+            <span
+              className={`${styles.pill} ${review.status === "approved" ? styles.pillApproved : styles.pillPending}`}
+            >
               {STATUS_LABEL[review.status] ?? review.status}
-            </p>
+            </span>
             {contract ? (
               <>
-                <p className="text-ink-soft">
+                <p className={`${styles.confirmSub} mt-3`}>
                   {review.agent_name} is following your decisions:
                 </p>
                 <FinalDecisions
+                  priorities={readStrings(contract.ranked_priorities)}
                   decisions={readAnswers(contract.decisions)}
-                  instructions={readStrings(contract.added_by_human)}
+                  instructions={(contract.notes ?? "")
+                    .split("\n")
+                    .map((l) => l.trim())
+                    .filter(Boolean)}
                 />
               </>
             ) : (
-              <p className="text-ink-soft">
+              <p className={`${styles.confirmSub} mt-3`}>
                 {review.agent_name} won&apos;t go ahead with this.
               </p>
             )}
-            <Link
-              href="/inbox"
-              className="inline-block text-sm font-semibold underline underline-offset-4"
-            >
-              Back to inbox
-            </Link>
+            <p className="mt-6">
+              <Link
+                href="/inbox"
+                className={`${local.addButton} inline-block py-2`}
+              >
+                Back to inbox
+              </Link>
+            </p>
           </section>
         )}
       </div>
-    </main>
+    </Shell>
   );
 }

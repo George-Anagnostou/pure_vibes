@@ -1,6 +1,12 @@
-import Link from "next/link";
+"use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+// The agent's pop-up (/align/[id]) uses Glass Box's own frosted TopBar instead.
 export function SiteNav() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/align/")) return null;
   return (
     <header className="border-b border-line bg-card">
       <nav className="mx-auto flex max-w-3xl items-center gap-1 px-4 py-2.5">

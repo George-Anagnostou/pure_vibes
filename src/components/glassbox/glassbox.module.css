@@ -1,0 +1,1262 @@
+/* Glass Box UI — light editorial system from Kathryn's Figma mock.
+   #f5f5f7 ground, white rows, Sentinel values, PP Mori labels. */
+
+.page {
+  min-height: 100vh;
+  background: #f5f5f7;
+  color: #000;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  padding: 18px 16px 96px;
+}
+
+.shell {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.shellWide {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #000;
+  margin-bottom: 28px;
+}
+
+.taskHeader {
+  margin: 0 auto 6px;
+  max-width: 580px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 300;
+  font-size: clamp(1.7rem, 4.5vw, 2.3rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: #000;
+}
+
+.taskHeader em {
+  font-style: italic;
+}
+
+/* Better line breaking for display text: avoids orphans and ragged
+   last lines (falls back gracefully where unsupported). */
+.pretty {
+  text-wrap: pretty;
+}
+
+.agentName {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 0 0 32px;
+}
+
+/* Headline with no subline under it */
+.taskHeaderSolo {
+  margin-bottom: 40px;
+}
+
+.card {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 0 32px;
+}
+
+.cardTitle {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  color: #000;
+}
+
+.cardHint {
+  margin: 0 0 14px;
+  font-size: 0.72rem;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* When a section title sits directly on a set (no hint between), keep at
+   least 12px of air above the tiles. */
+.cardTitle + .rankList,
+.cardTitle + .dialRow,
+.cardTitle + .hardList {
+  margin-top: 12px;
+}
+
+.submitLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+/* Stated vs revealed */
+.svr {
+  display: grid;
+  gap: 8px;
+}
+
+.svrRow {
+  display: grid;
+  gap: 2px;
+  padding: 12px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.svrRowDrift {
+  background: #fff;
+}
+
+.svrLabel {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.svrRowDrift .svrLabel {
+  color: #a05a00;
+}
+
+.svrStated,
+.svrRevealed {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #000;
+}
+
+.svrEvidence {
+  font-size: 0.78rem;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Ranked priority list */
+.rankList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.rankItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.rankItemDragging {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+  cursor: grabbing;
+  position: relative;
+  z-index: 2;
+}
+
+.rankItemTop {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.rankBody {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+
+.rankNum {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.rankItemTop .rankNum {
+  color: #000;
+}
+
+.rankName {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 400; /* Sentinel Book */
+  color: #000;
+}
+
+.rankAdded {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.rankGrip {
+  flex: none;
+  width: 14px;
+  height: 24px;
+  background-image: radial-gradient(circle, #3a3a3c 1.6px, transparent 1.7px);
+  background-size: 7px 8px;
+  transition: transform 200ms ease;
+}
+
+.rankItemArmed .rankGrip {
+  transform: translateX(-10px);
+}
+
+/* Hidden until the tile is tapped: the grip slides 10px left and a red
+   close control fades in at the tile's top-right corner (Figma 5:1799). */
+.rankRemove {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #c62828;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.rankItemArmed .rankRemove {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.rankRemove:hover {
+  background: rgba(198, 40, 40, 0.1);
+}
+
+/* Top app bar */
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -18px -16px 24px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.65);
+}
+
+.topBarSide {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.topBarLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #000;
+  text-decoration: none;
+}
+
+.topBarLink:hover {
+  opacity: 0.6;
+}
+
+.topBarBrand {
+  flex: none;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #000;
+}
+
+.topBarLogo {
+  flex: none;
+  display: block;
+  height: 16px;
+  width: auto;
+}
+
+/* Two-column alignment layout */
+.alignShell {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.alignLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sideSticky {
+  display: grid;
+  gap: 14px;
+  align-self: start;
+}
+
+@media (min-width: 960px) {
+  .alignShell {
+    max-width: 980px;
+  }
+
+  .alignLayout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 0 32px;
+    align-items: start;
+  }
+
+  .sideSticky {
+    position: sticky;
+    top: 76px;
+  }
+}
+
+/* Optional values — group card with vertical "+" rows */
+.optCard {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 8px rgba(40, 50, 80, 0.07);
+}
+
+.optCardTitle {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #000;
+  text-align: left;
+}
+
+.optList {
+  display: grid;
+  gap: 2px;
+}
+
+.optRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.55);
+  text-align: left;
+  cursor: pointer;
+  min-height: 0;
+}
+
+.optRow:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #000;
+}
+
+.optRowAdded {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.optRowAdded:hover {
+  background: transparent;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.optRowBody {
+  display: grid;
+  gap: 1px;
+}
+
+.optRowReason {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.optRowCritical .optRowReason {
+  color: #c62828;
+}
+
+.optRowCritical .sugChipIcon {
+  color: #c62828;
+}
+
+/* Onboarding */
+.onboardShell {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.onboardCard {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 8px rgba(40, 50, 80, 0.07);
+  margin-bottom: 16px;
+}
+
+.stepLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.45);
+  margin: 0 0 8px;
+}
+
+.stepDots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.stepDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.18);
+  transition:
+    width 200ms ease,
+    background 200ms ease;
+}
+
+.stepDotActive {
+  width: 18px;
+  background: #000;
+}
+
+.oauthStack {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.oauthBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.oauthBtn:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.oauthIcon {
+  flex: none;
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  font-size: 0.72rem;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.fieldLabel {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  margin: 0;
+}
+
+.fieldInput {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.95rem;
+  color: #000;
+}
+
+.fieldInput::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.fieldInput:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+.backLink {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+.backLink:hover {
+  background: transparent;
+  color: #000;
+}
+
+.onboardFooter {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  margin-top: 20px;
+}
+
+/* Secondary (outline) button */
+.btnSecondary {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #000;
+}
+
+.btnSecondary:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Suggestions — frosted tray with "+" pill chips */
+.sugTray {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 20px;
+  padding: 8px;
+}
+
+.sugTrayInner {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  padding: 11px 8px 10px;
+}
+
+.sugTrayTitle {
+  margin: 0 0 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  color: #000;
+}
+
+.sugList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sugChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 14px 7px 9px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
+.sugChip:hover {
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  color: #000;
+}
+
+.sugChipIcon {
+  flex: none;
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: #5a5a5a;
+}
+
+.sugChipCritical .sugChipIcon {
+  color: #c62828;
+}
+
+.sugChipAdded {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sugChipAdded:hover {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.sugReasons {
+  margin: 10px 4px 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sugReason {
+  margin: 0;
+  font-size: 0.72rem;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.sugReasonCritical {
+  color: #c62828;
+}
+
+/* Dials */
+.dialRow {
+  display: grid;
+  gap: 8px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 14px 17px 16px;
+  margin-bottom: 8px;
+}
+
+.dialLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.dialLabelActive {
+  color: #000;
+  font-weight: 500;
+}
+
+.dialInput {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: #e5e5ea;
+  outline-offset: 6px;
+}
+
+.dialInput::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #000;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.dialInput::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #000;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+/* Hard lines */
+.hardList {
+  display: grid;
+  gap: 8px;
+}
+
+.hardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.hardLabel {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #000;
+  margin: 0;
+}
+
+.toggle {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 27px;
+  min-height: 27px;
+  padding: 0;
+  border-radius: 14px;
+  border: none;
+  background: #e5e5ea;
+  transition: background 150ms ease;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 150ms ease;
+}
+
+.toggleOn {
+  background: #000;
+}
+
+.toggleOn::after {
+  transform: translateX(19px);
+}
+
+.toggle:hover {
+  background: #d9d9de;
+}
+
+.toggleOn:hover {
+  background: #222;
+}
+
+.budgetRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.budgetInput {
+  width: 90px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e5ea;
+  background: #f5f5f7;
+  color: #000;
+  font-size: 0.85rem;
+}
+
+/* Cost strip */
+.cost {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 500;
+}
+
+.costBefore {
+  color: rgba(0, 0, 0, 0.35);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.costArrow {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 1rem;
+}
+
+.costAfter {
+  color: #000;
+}
+
+/* Submit */
+.submitBar {
+  position: sticky;
+  bottom: 16px;
+  margin-top: 28px;
+}
+
+.submit {
+  width: 100%;
+  min-height: 54px;
+  border: none;
+  border-radius: 14px;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #000;
+}
+
+.submit:hover {
+  background: #222;
+}
+
+.confirm {
+  text-align: center;
+  padding: 64px 20px;
+}
+
+.confirmMark {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  background: #000;
+  color: #fff;
+}
+
+.confirmTitle {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 500;
+  font-size: 1.7rem;
+  margin: 0 0 8px;
+  color: #000;
+}
+
+.confirmSub {
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* Dashboard */
+.feed {
+  display: grid;
+  gap: 8px;
+}
+
+.feedItem {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.feedDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #2e7d32;
+}
+
+.feedDotDrift {
+  background: #ed9b00;
+}
+
+.feedDotBreach {
+  background: #c62828;
+}
+
+.feedAction {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: #000;
+  margin: 0;
+}
+
+.feedDetail {
+  font-size: 0.78rem;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 2px 0 0;
+}
+
+.feedTime {
+  flex: none;
+  font-size: 0.72rem;
+  color: rgba(0, 0, 0, 0.35);
+  margin-top: 4px;
+}
+
+.feedBreach {
+  box-shadow:
+    inset 3px 0 0 #c62828,
+    0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.stat {
+  padding: 16px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.statValue {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.9rem;
+  font-weight: 500;
+  color: #000;
+  margin: 0;
+}
+
+.statSaved {
+  color: #2e7d32;
+}
+
+.statLabel {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  margin: 4px 0 0;
+}
+
+.reviewLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.reviewCard {
+  padding: 14px 17px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 120ms ease;
+}
+
+.reviewLink:hover .reviewCard {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pillPending {
+  background: #f5ead9;
+  color: #a05a00;
+}
+
+.pillApproved {
+  background: #e3efe4;
+  color: #2e7d32;
+}
+
+.sectionGap {
+  margin-top: 32px;
+}
+
+@media (min-width: 720px) {
+  .page {
+    padding: 40px 24px 120px;
+  }
+
+  .topBar {
+    margin: -40px -24px 32px;
+    padding: 12px 24px;
+  }
+}
+
+/* Liquid glass treatment — translucent tiles with backdrop blur and a
+   specular top edge, over soft color fields that give the glass something
+   to refract. Overrides the flat surfaces defined above. */
+
+/* Soft immersive frosted sky: pale blue overhead easing into a warm
+   horizon, with slow-drifting blurred cloud forms behind the glass. */
+.page {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    #afc9ee 0%,
+    #cdddf4 34%,
+    #e7ebf2 68%,
+    #f4efe7 100%
+  );
+  background-attachment: fixed;
+}
+
+.page::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      640px 300px at 22% 18%,
+      rgba(255, 255, 255, 0.85),
+      transparent 70%
+    ),
+    radial-gradient(
+      760px 340px at 78% 34%,
+      rgba(255, 255, 255, 0.65),
+      transparent 70%
+    ),
+    radial-gradient(
+      560px 280px at 40% 62%,
+      rgba(255, 255, 255, 0.5),
+      transparent 70%
+    ),
+    radial-gradient(
+      500px 300px at 85% 80%,
+      rgba(255, 224, 196, 0.35),
+      transparent 70%
+    ),
+    radial-gradient(
+      420px 260px at 10% 85%,
+      rgba(203, 190, 255, 0.22),
+      transparent 70%
+    );
+  filter: blur(46px);
+  animation: gbClouds 90s ease-in-out infinite alternate;
+}
+
+@keyframes gbClouds {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 2.5%, 0) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page::before {
+    animation: none;
+  }
+}
+
+.shell,
+.shellWide {
+  position: relative;
+  z-index: 1;
+}
+
+.svrRow,
+.rankItem,
+.dialRow,
+.hardRow,
+.stat,
+.feedItem,
+.reviewCard {
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 8px rgba(40, 50, 80, 0.07);
+}
+
+.rankItemDragging {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 14px 34px rgba(40, 50, 80, 0.2);
+}
+
+.feedBreach {
+  box-shadow:
+    inset 3px 0 0 #c62828,
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 8px rgba(40, 50, 80, 0.07);
+}
+
+.sugTray {
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.sugTrayInner {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.sugChip {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(40, 50, 80, 0.08);
+}
+
+.sugChip:hover {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 3px 10px rgba(40, 50, 80, 0.14);
+}
+
+.budgetInput {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.toggle {
+  background: rgba(120, 128, 142, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 2px rgba(40, 50, 80, 0.12);
+}
+
+.toggle:hover {
+  background: rgba(120, 128, 142, 0.35);
+}
+
+.toggleOn {
+  background: rgba(10, 10, 12, 0.82);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.toggleOn:hover {
+  background: rgba(30, 30, 34, 0.85);
+}
+
+.dialInput {
+  background: rgba(120, 128, 142, 0.25);
+}
+
+.submit {
+  background: rgba(10, 10, 12, 0.78);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.submit:hover {
+  background: rgba(28, 28, 32, 0.82);
+}
+
+.confirmMark {
+  background: rgba(10, 10, 12, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pillPending {
+  background: rgba(245, 234, 217, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.pillApproved {
+  background: rgba(227, 239, 228, 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
