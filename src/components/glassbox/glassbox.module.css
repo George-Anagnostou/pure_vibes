@@ -1431,6 +1431,8 @@
 /* Button variant of a project tile (pending reviews open the sheet). */
 .projectTileButton {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.55);
   font: inherit;
   text-align: left;
@@ -1570,6 +1572,9 @@
 }
 
 .projectName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-serif), Georgia, serif;
   font-size: 1.125rem;
   font-weight: 400;
