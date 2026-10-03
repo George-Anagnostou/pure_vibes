@@ -1,4 +1,3 @@
-import { HttpError } from "@/lib/http";
 import { getContract, logEvent } from "@/lib/glassbox/reviews";
 import { HARD_LINES, type CheckpointResult, type HardLineKey } from "@/lib/glassbox/types";
 
