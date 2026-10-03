@@ -73,7 +73,13 @@ const hook = (file, timeout) => ({
 });
 const settingsPath = join(dir, ".claude/settings.local.json");
 const settings = readJson(settingsPath);
-settings.env = { ...settings.env, GLASSBOX_URL: url, GLASSBOX_AGENT_KEY: key };
+// MCP_TOOL_TIMEOUT: the server answers within ~45s, but give slow networks headroom.
+settings.env = {
+  ...settings.env,
+  GLASSBOX_URL: url,
+  GLASSBOX_AGENT_KEY: key,
+  MCP_TOOL_TIMEOUT: "120000",
+};
 settings.enableAllProjectMcpServers = true;
 settings.hooks = {
   ...settings.hooks,

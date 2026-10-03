@@ -4,7 +4,6 @@ import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
 import {
   createReview,
-  getContract,
   waitForContract,
   type ContractLookup,
 } from "@/lib/glassbox/reviews";
@@ -12,10 +11,12 @@ import { requestSpend } from "@/lib/glassbox/spend";
 import { HttpError } from "@/lib/http";
 
 export const runtime = "nodejs";
-// align runs Reveal + Critique (~10-25s) and then waits for the human, so give it room.
-export const maxDuration = 120;
-// Stop waiting this long after the request started, leaving margin under maxDuration.
-const ALIGN_WAIT_UNTIL_MS = 95_000;
+export const maxDuration = 60;
+// Claude Code abandons an MCP call after ~60s, so every tool answers well inside that:
+// align returns by ~45s after the request started (Reveal + Critique take 10-25s),
+// and get_contract long-polls up to 40s per call.
+const ALIGN_WAIT_UNTIL_MS = 45_000;
+const GET_CONTRACT_WAIT_MS = 40_000;
 
 // Glass Box MCP server. Every tool is scoped to the user who owns the gb_ key.
 // mcp-handler ignores the path, so /api/mcp/mcp is the canonical endpoint.
@@ -54,7 +55,7 @@ function contractPayload(lookup: ContractLookup) {
     return {
       status: "pending",
       align_url: lookup.align_url,
-      next: "Show the human align_url (open it for them if you can), wait for them to submit, then call get_contract.",
+      next: "Show the human align_url (open it for them if you can), then call get_contract — it waits for them to submit. Repeat get_contract until approved.",
     };
   }
   return {
@@ -67,7 +68,7 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Call this BEFORE executing any multi-step plan, and again whenever the plan changes materially. Send the task, your full plan, and YOUR OWN ranked priorities. Glass Box reveals what the plan actually optimizes for (from its steps, not your words), flags what you missed, and asks the human to re-rank priorities at align_url. Waits for the human to submit (up to ~1 min). When a contract comes back, it is binding: follow its ranked_priorities, plan_guidance and hard_lines, call `checkpoint` before each consequential action, and `request_spend` before spending money. If status is pending, show the human align_url, then call get_contract.";
+  "Call this BEFORE executing any multi-step plan, and again whenever the plan changes materially. Send the task, your full plan, and YOUR OWN ranked priorities. Glass Box reveals what the plan actually optimizes for (from its steps, not your words), flags what you missed, and asks the human to re-rank priorities at align_url. Waits briefly for the human to submit. When a contract comes back, it is binding: follow its ranked_priorities, plan_guidance and hard_lines, call `checkpoint` before each consequential action, and `request_spend` before spending money. If status is pending, show the human align_url, then call get_contract.";
 
 const handler = createMcpHandler(
   (server) => {
@@ -142,7 +143,7 @@ const handler = createMcpHandler(
       {
         title: "Get priority contract",
         description:
-          "Fetch the human-approved priority contract for a review. Follow it exactly once approved; if pending, wait and call again.",
+          "Wait (up to ~40s) for the human-approved priority contract for a review. Follow it exactly once approved; if still pending, call again.",
         inputSchema: z.object({ review_id: reviewId }),
       },
       async ({ review_id }, ctx) => {
@@ -150,7 +151,13 @@ const handler = createMcpHandler(
           const agent = agentFrom(ctx as ToolCtx);
           return text({
             review_id,
-            ...contractPayload(await getContract(review_id, agent.userId)),
+            ...contractPayload(
+              await waitForContract(
+                review_id,
+                agent.userId,
+                Date.now() + GET_CONTRACT_WAIT_MS,
+              ),
+            ),
           });
         } catch (error) {
           return toolError(error);
