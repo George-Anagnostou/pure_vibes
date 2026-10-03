@@ -81,7 +81,11 @@ export default async function AlignPage({
         </h1>
 
         {review.status === "pending" && !isReady(review) ? (
-          <WaitingForAgent agentName={review.agent_name} />
+          <WaitingForAgent
+            agentName={review.agent_name}
+            reviewId={review.id}
+            createdAt={review.created_at}
+          />
         ) : review.status === "pending" ? (
           <AlignPanel review={review} />
         ) : (
