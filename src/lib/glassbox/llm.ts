@@ -85,10 +85,16 @@ const listStated = (decisions: Decision[] = []) =>
           [
             `${i + 1}. [${d.topic}] ${d.question}${d.source ? ` (source: ${d.source})` : ""}`,
             `   agent's choice: ${d.choice}`,
-            d.thinks_you_want ? `   thinks the human wants: ${d.thinks_you_want}` : "",
+            d.thinks_you_want
+              ? `   thinks the human wants: ${d.thinks_you_want}`
+              : "",
             d.why ? `   reasoning: ${d.why}` : "",
-            ...(d.alternatives ?? []).map((o) => `   alternative: ${o.option} (${o.tradeoff})`),
-            d.est_tokens !== undefined || d.est_cost_usd !== undefined || d.est_time
+            ...(d.alternatives ?? []).map(
+              (o) => `   alternative: ${o.option} (${o.tradeoff})`,
+            ),
+            d.est_tokens !== undefined ||
+            d.est_cost_usd !== undefined ||
+            d.est_time
               ? `   estimate for its choice: ~${fmtTokens(d.est_tokens)} tokens, $${d.est_cost_usd ?? "?"}, ${d.est_time ?? "? time"}`
               : "",
           ]
@@ -146,7 +152,10 @@ function matchDecision(sg: Suggestion, decisions: Decision[]) {
 
 // Keep only suggestions that make sense: challenges must point at a real decision
 // and recommend something other than the agent's choice; additions must be new.
-export function sanitizeSuggestions(suggestions: Critique["suggestions"], decisions: Decision[] = []) {
+export function sanitizeSuggestions(
+  suggestions: Critique["suggestions"],
+  decisions: Decision[] = [],
+) {
   const seen = new Set<string>();
   const out: Critique["suggestions"] = [];
   for (const sg of suggestions) {
@@ -154,7 +163,8 @@ export function sanitizeSuggestions(suggestions: Critique["suggestions"], decisi
     if (sg.action === "challenge") {
       if (at === -1) continue;
       const d = decisions[at];
-      if (!sg.recommend.trim() || words(sg.recommend) === words(d.choice)) continue;
+      if (!sg.recommend.trim() || words(sg.recommend) === words(d.choice))
+        continue;
       const key = words(d.topic);
       if (seen.has(key)) continue;
       seen.add(key);

@@ -66,29 +66,40 @@ export const CONTRACT_INSTRUCTIONS =
   "These decisions are binding: the human made them, not you. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
 
 // "You changed 2 of 6 decisions: Scope → 3-hospital proof of concept; …"
-export function describeDecisions(decisions: DecisionAnswer[], instructions: string[]) {
+export function describeDecisions(
+  decisions: DecisionAnswer[],
+  instructions: string[],
+) {
   const changed = decisions.filter((d) => d.changed);
   const head = changed.length
     ? `The human changed ${changed.length} of ${decisions.length} decisions: ${changed
         .map((d) => `${d.topic} → ${d.answer}`)
         .join("; ")}.`
     : `The human kept all ${decisions.length} of your decisions.`;
-  return instructions.length ? `${head} They also told you: ${instructions.join("; ")}.` : head;
+  return instructions.length
+    ? `${head} They also told you: ${instructions.join("; ")}.`
+    : head;
 }
 
 export function toContract(row: ContractRow): Contract {
   const hardLines = row.hard_lines as Record<string, boolean>;
-  const decisions = ((row.decisions as DecisionAnswer[] | null) ?? []).map((d) => ({
-    topic: d.topic,
-    question: d.question,
-    decision: d.answer,
-    changed_by_human: d.changed,
-    ...(d.changed && d.agent_choice ? { your_original_choice: d.agent_choice } : {}),
-  }));
+  const decisions = ((row.decisions as DecisionAnswer[] | null) ?? []).map(
+    (d) => ({
+      topic: d.topic,
+      question: d.question,
+      decision: d.answer,
+      changed_by_human: d.changed,
+      ...(d.changed && d.agent_choice
+        ? { your_original_choice: d.agent_choice }
+        : {}),
+    }),
+  );
   const instructions = (row.added_by_human as string[] | null) ?? [];
   const lines = Object.entries(hardLines)
     .filter(([, on]) => on)
-    .map(([k]) => (k === "budget_cap" ? `budget_max_cents:${row.budget_cents}` : k));
+    .map(([k]) =>
+      k === "budget_cap" ? `budget_max_cents:${row.budget_cents}` : k,
+    );
   return {
     review_id: row.review_id,
     decisions,

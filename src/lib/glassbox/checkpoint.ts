@@ -224,7 +224,9 @@ export async function runCheckpoint(
   // The human's decisions stand in for ranked priorities (first = most weight).
   const result = evaluateCheckpoint(input, {
     hard_lines: lookup.contract.hard_lines,
-    ranked_priorities: lookup.contract.decisions.map((d) => `${d.topic}: ${d.decision}`),
+    ranked_priorities: lookup.contract.decisions.map(
+      (d) => `${d.topic}: ${d.decision}`,
+    ),
   });
   await logEvent({
     reviewId,
