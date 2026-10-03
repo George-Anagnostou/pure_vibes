@@ -1,15 +1,18 @@
 import { requireUser } from "@/lib/auth";
-import { appUrl, requiredEnv } from "@/lib/env";
+import { appUrl } from "@/lib/env";
 import { assertSameOrigin, errorResponse, HttpError, json } from "@/lib/http";
 import { stripeClient } from "@/lib/stripe/client";
 import { getOrCreateCustomer } from "@/lib/stripe/customer";
+import { getBillingPlan } from "@/lib/stripe/plan";
 
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const { user } = await requireUser();
     const stripe = stripeClient();
-    const price = requiredEnv("STRIPE_PRICE_ID");
+    // Reject inactive/misconfigured plans before creating a customer or session.
+    const plan = await getBillingPlan();
+    const price = plan.priceId;
     const customer = await getOrCreateCustomer(user.id);
     const subscriptions = await stripe.subscriptions.list({
       customer,
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
         mode: "subscription",
         line_items: [{ price, quantity: 1 }],
         client_reference_id: user.id,
-        metadata: { price_id: price },
+        metadata: { price_id: price, plan_version: plan.version },
         subscription_data: { metadata: { supabase_user_id: user.id } },
         success_url: `${appUrl()}/?billing=success`,
         cancel_url: `${appUrl()}/?billing=cancelled`,

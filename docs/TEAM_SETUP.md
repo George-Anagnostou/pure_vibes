@@ -71,6 +71,17 @@ Local and hosted user IDs differ. Switching databases while sharing a Stripe san
 
 ## 3. Configure Stripe test subscriptions
 
+The MCP-first monthly plan, sandbox resource inventory, account mismatch, and
+Supabase authentication/usage handoff are tracked in
+[MCP_BILLING_HANDOFF.md](MCP_BILLING_HANDOFF.md). Resolve the documented account
+mismatch before changing deployed price or webhook settings.
+
+The configured monthly price must include metadata `included_checkpoints`
+(positive integer), `overage_policy=blocked`, and `plan_version`. The signed-in
+`GET /api/billing/plan` endpoint exposes that plan for UI integration. This is
+plan configuration only; metering and visible usage require Nick's usage ledger
+and the account UI described in the handoff.
+
 1. Select the intended **sandbox / test mode**.
 2. Create a Product and a **recurring Price**. Choose the amount and currency as a team; the scaffold does not assume either.
 3. Set `STRIPE_PRICE_ID=price_...` and the matching `STRIPE_SECRET_KEY=sk_test_...`.
