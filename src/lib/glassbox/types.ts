@@ -81,24 +81,55 @@ export const RevealSchema = z.object({
 });
 export type Revealed = z.infer<typeof RevealSchema>;
 
-// ---- Everything steering the agent, gathered by interviewing it via the align tool ----
+// ---- The agent's plan, step by step: HOW it will do the task (planning-mode interview) ----
+// Stored in reviews.stated. Older rows hold priorities ({name, why, source}) or plain strings.
 export const StatedPrioritySchema = z.object({
   name: z
     .string()
     .trim()
     .min(1)
-    .max(100)
-    .describe("Short label, e.g. 'Speed', 'Price', 'Airline'"),
+    .max(120)
+    .describe("Short step title, e.g. 'Get historical market returns'"),
+  how: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .describe(
+      "Exactly how you'll do it: the method, data source, endpoint or library, e.g. 'Download S&P 500 + AGG annual returns 1990-2025 from Yahoo Finance via yfinance'",
+    ),
+  uses: z
+    .array(z.string().trim().max(80))
+    .max(8)
+    .optional()
+    .describe(
+      "Tools, APIs, data sources or services this step touches, e.g. ['WebFetch', 'yfinance', 'FRED API']",
+    ),
+  est_tokens: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "Your honest estimate of model tokens this step will consume (input + output)",
+    ),
+  est_cost_usd: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(
+      "Estimated dollars this step spends: model tokens plus any paid APIs or services",
+    ),
   why: z
     .string()
     .trim()
     .max(300)
-    .describe("One line: why you are prioritizing this"),
+    .describe("One line: why this step / why this way"),
   source: z
     .enum(["request", "instructions", "rules", "judgment", "assumption"])
     .optional()
     .describe(
-      "request = the human's ask; instructions = their instructions, memory or project files (e.g. CLAUDE.md); rules = your system prompt, built-in guidelines or safety rules; judgment = your own defaults and habits; assumption = something you assumed without being told",
+      "Why it's in the plan: request = the human asked; instructions = their instructions or project files (e.g. CLAUDE.md); rules = your guidelines or safety rules; judgment = your own default way of doing it; assumption = you assumed it without being told",
     ),
 });
 export type StatedPriority = z.infer<typeof StatedPrioritySchema>;
