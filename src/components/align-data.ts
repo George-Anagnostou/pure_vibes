@@ -3,7 +3,15 @@ import type { Json } from "@/types/database";
 // Defensive readers for review/contract jsonb -> UI shapes. They accept both
 // the current contract and older rows, so a review never fails to render.
 
-export type StatedPriority = { name: string; why: string };
+export const SOURCE_LABEL: Record<string, string> = {
+  request: "Your request",
+  instructions: "Your instructions",
+  rules: "Its rules",
+  judgment: "Its judgment",
+  assumption: "Assumption",
+};
+
+export type StatedPriority = { name: string; why: string; source?: string };
 export type SuggestionAction = "add" | "drop" | "raise" | "lower";
 export type Suggestion = {
   action: SuggestionAction;
@@ -16,6 +24,7 @@ export type AlignReview = {
   id: string;
   agent_name: string;
   task: string;
+  plan?: string | null;
   status: string;
   stated: Json;
   critique: Json | null;
@@ -36,7 +45,11 @@ export function readStated(value: Json | undefined): StatedPriority[] {
       typeof entry === "string"
         ? { name: entry.trim(), why: "" }
         : isObject(entry)
-          ? { name: str(entry.name), why: str(entry.why) }
+          ? {
+              name: str(entry.name),
+              why: str(entry.why),
+              source: SOURCE_LABEL[str(entry.source)],
+            }
           : null;
     if (item?.name && !out.some((o) => samePriority(o.name, item.name)))
       out.push(item);

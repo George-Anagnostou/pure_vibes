@@ -38,6 +38,7 @@ function initialBoard(review: AlignReview): Board {
       id: `agent:${p.name}`,
       name: p.name,
       detail: p.why || undefined,
+      source: p.source,
       origin: "agent",
       hint:
         nudge && nudge.action !== "add"
@@ -55,6 +56,7 @@ function initialBoard(review: AlignReview): Board {
       id: `suggested:${s.priority}`,
       name: s.priority,
       detail: s.why || undefined,
+      source: "Glass Box",
       origin: "suggested",
     }));
   return { ranked, pool };
@@ -187,9 +189,19 @@ export function AlignPanel({
   return (
     <div className="space-y-6">
       <section aria-labelledby={`rank-${review.id}`}>
+        {review.plan && !review.plan.startsWith("(no step-by-step plan") && (
+          <details className="mb-3 rounded-xl border border-line bg-card px-3 py-2 text-sm">
+            <summary className="cursor-pointer font-semibold">
+              What it&apos;s thinking
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap text-ink-soft">
+              {review.plan}
+            </p>
+          </details>
+        )}
         <p id={`rank-${review.id}`} className="text-sm text-ink-soft">
-          Drag to rank what matters. Pull ideas in from the right, or drag a
-          priority out to drop it.
+          Everything steering {review.agent_name}. Drag to rank, pull ideas in
+          from the right, or drag one out to drop it.
         </p>
         <div className="mt-3">
           <PriorityBoard board={board} onChange={setBoard} />

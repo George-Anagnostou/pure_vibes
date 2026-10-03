@@ -55,10 +55,11 @@ Estimate where the plan sits on each dial (0 = left label, 1 = right label):
 Estimate realistic monthly and one-time USD cost of running the plan as written.
 The headline is one plain-English sentence a non-engineer would understand.`;
 
-const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed and told us its priorities (highest first, each with a reason). An independent auditor also inferred what its plan actually optimizes for. The task can be anything: booking travel, buying something, writing code, research.
+const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed and told us everything steering it (highest first, each with a reason and a source: request, instructions, rules = its built-in guidelines, judgment = its own defaults, assumption = something it assumed). An independent auditor also inferred what its plan actually optimizes for. The task can be anything: booking travel, buying something, writing code, research.
 
-1. suggestions (2-4, most important first) — what the human should change about the agent's priority list:
+1. suggestions (3-6, most important first) — what the human should change about the agent's priority list:
    - "add": a priority the agent never considered that this person would plausibly care about, inferred from the task (e.g. Price when booking a flight, Data privacy when handling personal info, "Just for me" for a personal app).
+   - Look hard at "judgment" and "assumption" priorities: those are where agents quietly go wrong. Suggest dropping or lowering the ones this person likely wouldn't sign off on.
    - "drop": an agent priority that likely doesn't matter to this person or is costing them (e.g. a specific Airline when any carrier would do).
    - "raise" / "lower": an agent priority that is ranked too low / too high for what this person would want.
    For drop/raise/lower, "priority" must be exactly one of the agent's priority names. Write "why" as one short, friendly sentence to the human, concrete to their task. Never suggest something already on the list.
@@ -75,7 +76,10 @@ const quote = ({ task, plan }: Input) =>
 const listStated = (stated: StatedPriority[] = []) =>
   stated.length
     ? stated
-        .map((p, i) => `${i + 1}. ${p.name}${p.why ? ` — ${p.why}` : ""}`)
+        .map(
+          (p, i) =>
+            `${i + 1}. ${p.name}${p.source ? ` [${p.source}]` : ""}${p.why ? ` — ${p.why}` : ""}`,
+        )
         .join("\n")
     : "(none stated)";
 

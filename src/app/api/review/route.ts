@@ -11,7 +11,7 @@ const body = z.object({
   task: z.string().trim().min(1).max(4000),
   plan: z.string().trim().max(15000).optional(),
   agent_name: z.string().trim().max(100).optional(),
-  priorities: z.array(StatedPrioritySchema).min(1).max(12),
+  priorities: z.array(StatedPrioritySchema).min(1).max(20),
 });
 
 // POST /api/review — an agent submits its priorities ({name, why}[]) and optional plan: Reveal + Critique,

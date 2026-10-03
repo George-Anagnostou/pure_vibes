@@ -4,12 +4,58 @@ export const FLIGHT_PLAN = {
   agent_name: "Travel agent",
   task: "Book me a flight from San Francisco to New York.",
   priorities: [
-    { name: "Speed", why: "Get you there today: leave on the next nonstop" },
-    { name: "Airline", why: "You flew United last time, so stick with United" },
+    {
+      name: "Leave today",
+      why: "You said 'book me a flight' with no date, so I assumed as soon as possible",
+      source: "assumption",
+    },
+    {
+      name: "Nonstop",
+      why: "Fewer connections means less that can go wrong",
+      source: "judgment",
+    },
+    {
+      name: "United",
+      why: "Your last booking was United, so I'll stay loyal",
+      source: "assumption",
+    },
+    {
+      name: "Earliest arrival",
+      why: "Getting you there sooner seems best",
+      source: "judgment",
+    },
+    {
+      name: "Use saved card",
+      why: "It's on file, so checkout is one step",
+      source: "judgment",
+    },
+    {
+      name: "Finish in one pass",
+      why: "I try to complete tasks without interrupting you",
+      source: "judgment",
+    },
+    {
+      name: "Economy class",
+      why: "Default cabin when none is specified",
+      source: "assumption",
+    },
+    {
+      name: "Email confirmation",
+      why: "Send you the itinerary once booked",
+      source: "judgment",
+    },
+    {
+      name: "Don't share your data",
+      why: "Only give the airline what booking requires",
+      source: "rules",
+    },
+    {
+      name: "Never book without permission",
+      why: "My guidelines require consent for purchases",
+      source: "rules",
+    },
   ],
-  plan: `1. Search United nonstops SFO -> JFK/EWR departing today.
-2. Pick the earliest departure.
-3. Book it with your saved card and email you the confirmation.`,
+  plan: `I'll search United nonstops SFO -> JFK/EWR departing today, pick the earliest arrival, book it in economy with your saved card, and email you the confirmation. I won't check other airlines or dates since speed seems to matter most.`,
 };
 
 export const WINE_PLAN = {

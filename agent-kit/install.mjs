@@ -63,6 +63,7 @@ for (const f of [
   "glassbox-lib.mjs",
   "glassbox-context.mjs",
   "glassbox-guard.mjs",
+  "glassbox-popup.mjs",
 ]) {
   copyFileSync(join(kit, "hooks", f), join(dir, ".claude/hooks/glassbox", f));
 }
@@ -93,6 +94,12 @@ settings.hooks = {
   PreToolUse: [
     { matcher: "Bash|WebFetch", hooks: [hook("glassbox-guard.mjs", 15)] },
   ],
+  PostToolUse: [
+    {
+      matcher: "mcp__glassbox__align",
+      hooks: [hook("glassbox-popup.mjs", 10)],
+    },
+  ],
 };
 writeJson(settingsPath, settings);
 
@@ -120,5 +127,6 @@ if (missing.length)
 
 console.log(`Glass Box connected in ${dir}
   MCP:   ${url}/api/mcp/mcp  (tools: align, get_contract, checkpoint, request_spend; prompt /mcp__glassbox__align)
-  Hooks: SessionStart + UserPromptSubmit (contract re-injection), PreToolUse Bash|WebFetch (checkpoint guard)
+  Hooks: SessionStart + UserPromptSubmit (contract re-injection), PreToolUse Bash|WebFetch (checkpoint guard),
+         PostToolUse align (opens the pop-up window for the human)
 Start Claude Code in that directory and run /mcp to confirm "glassbox" is connected.`);

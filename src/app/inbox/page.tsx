@@ -20,7 +20,7 @@ export default async function InboxPage() {
 
   const { data: reviews, error } = await supabase
     .from("reviews")
-    .select("id, agent_name, task, status, stated, critique, created_at")
+    .select("id, agent_name, task, plan, status, stated, critique, created_at")
     .order("created_at", { ascending: false })
     .limit(20);
   if (error)

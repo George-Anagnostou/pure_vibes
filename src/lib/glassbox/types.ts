@@ -81,7 +81,7 @@ export const RevealSchema = z.object({
 });
 export type Revealed = z.infer<typeof RevealSchema>;
 
-// ---- The agent's own priorities, gathered by interviewing it via the align tool ----
+// ---- Everything steering the agent, gathered by interviewing it via the align tool ----
 export const StatedPrioritySchema = z.object({
   name: z
     .string()
@@ -94,6 +94,12 @@ export const StatedPrioritySchema = z.object({
     .trim()
     .max(300)
     .describe("One line: why you are prioritizing this"),
+  source: z
+    .enum(["request", "instructions", "rules", "judgment", "assumption"])
+    .optional()
+    .describe(
+      "request = the human's ask; instructions = their instructions, memory or project files (e.g. CLAUDE.md); rules = your system prompt, built-in guidelines or safety rules; judgment = your own defaults and habits; assumption = something you assumed without being told",
+    ),
 });
 export type StatedPriority = z.infer<typeof StatedPrioritySchema>;
 
@@ -117,7 +123,7 @@ export type Suggestion = z.infer<typeof SuggestionSchema>;
 export const CritiqueSchema = z.object({
   suggestions: z
     .array(SuggestionSchema)
-    .describe("2-4 suggestions, most important first"),
+    .describe("3-6 suggestions, most important first"),
   hard_line_risks: z.array(
     z.object({
       step: z.string().describe("The plan step at risk"),

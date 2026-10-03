@@ -30,6 +30,7 @@ export type BoardItem = {
   id: string;
   name: string;
   detail?: string; // agent's why, or Glass Box's reason for a suggestion
+  source?: string; // where it came from: "Your request", "Its rules", "Assumption"…
   origin: "agent" | "suggested";
   hint?: string; // Glass Box nudge on an agent priority, e.g. "Maybe drop"
 };
@@ -115,18 +116,18 @@ export function PriorityBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[3fr_2fr] gap-2">
         <ColumnShell
           id="ranked"
-          title="Your ranking"
-          note="Top wins"
+          title="Its priorities"
+          note={`${board.ranked.length}`}
           items={board.ranked}
           empty="Drag a priority here"
         />
         <ColumnShell
           id="pool"
           title="Also consider"
-          note="Drag in"
+          note={board.pool.length ? `${board.pool.length}` : ""}
           items={board.pool}
           empty="Drag one here to set it aside"
         />
@@ -178,7 +179,7 @@ function ColumnShell({
       >
         <ol
           ref={setNodeRef}
-          className={`min-h-40 space-y-2 rounded-2xl p-1.5 transition-colors ${
+          className={`min-h-32 space-y-1.5 rounded-xl p-1 transition-colors ${
             pool ? "bg-paper/80 ring-1 ring-line ring-inset" : ""
           } ${isOver ? "ring-2 ring-ink/30" : ""}`}
         >
@@ -233,6 +234,13 @@ function SortableBar({ item, rank }: { item: BoardItem; rank?: number }) {
   );
 }
 
+const SOURCE_TONE: Record<string, string> = {
+  Assumption: "bg-warn-bg text-warn",
+  "Its judgment": "bg-warn-bg text-warn",
+  "Its rules": "bg-paper text-ink-soft",
+  "Glass Box": "bg-go-bg text-go",
+};
+
 function Bar({
   item,
   rank,
@@ -245,48 +253,49 @@ function Bar({
   const ranked = rank !== undefined;
   return (
     <span
-      className={`flex items-start gap-2 rounded-xl border px-2.5 py-2.5 ${
+      title={[item.hint, item.detail].filter(Boolean).join("\n")}
+      className={`flex items-start gap-1.5 rounded-lg border px-2 py-1.5 ${
         lifted
           ? "border-ink bg-card shadow-xl"
           : ranked
             ? "border-line bg-card shadow-sm"
-            : "ml-1.5 border-dashed border-line bg-card/60 text-ink/80"
+            : "ml-1 border-dashed border-line bg-card/60 text-ink/80"
       }`}
     >
-      {ranked ? (
-        <span
-          className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold ${
-            rank === 1 ? "bg-ink text-white" : "bg-paper text-ink"
-          }`}
-        >
-          {rank}
-        </span>
-      ) : (
-        <span
-          aria-hidden
-          className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-dashed border-ink-soft/60 text-[10px] text-ink-soft"
-        >
-          ⋮
-        </span>
-      )}
+      <span
+        aria-hidden={!ranked}
+        className={`mt-px grid size-4.5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+          ranked
+            ? "bg-paper text-ink"
+            : "border border-dashed border-ink-soft/60 text-ink-soft"
+        }`}
+      >
+        {ranked ? rank : "+"}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-1">
-          <span className="text-sm leading-tight font-semibold break-words">
+          <span className="text-[13px] leading-tight font-semibold break-words">
             {item.name}
           </span>
-          {ranked && item.origin === "suggested" && (
-            <span className="rounded-full bg-go-bg px-1.5 py-px text-[10px] font-semibold text-go">
-              Added
+          {item.source && (
+            <span
+              className={`rounded px-1 py-px text-[9px] leading-tight font-semibold uppercase ${
+                ranked && item.origin === "suggested"
+                  ? "bg-go-bg text-go"
+                  : (SOURCE_TONE[item.source] ?? "bg-paper text-ink-soft")
+              }`}
+            >
+              {ranked && item.origin === "suggested" ? "Added" : item.source}
             </span>
           )}
         </span>
         {item.hint && (
-          <span className="mt-1 line-clamp-2 block text-[11px] leading-snug font-semibold text-warn">
+          <span className="mt-0.5 line-clamp-1 text-[10.5px] leading-snug font-semibold text-warn">
             {item.hint}
           </span>
         )}
         {item.detail && (
-          <span className="mt-0.5 line-clamp-3 block text-[11px] leading-snug text-ink-soft">
+          <span className="line-clamp-1 text-[10.5px] leading-snug text-ink-soft">
             {item.detail}
           </span>
         )}

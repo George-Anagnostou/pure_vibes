@@ -13,10 +13,9 @@ import { HttpError } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-// Claude Code abandons an MCP call after ~60s, so every tool answers well inside that:
-// align returns by ~45s after the request started (Reveal + Critique take 10-25s),
-// and get_contract long-polls up to 40s per call.
-const ALIGN_WAIT_UNTIL_MS = 45_000;
+// Claude Code abandons an MCP call after ~60s. align returns as soon as the review
+// exists (~5s) so the client can open the pop-up; get_contract long-polls up to 40s.
+const ALIGN_WAIT_UNTIL_MS = 0;
 const GET_CONTRACT_WAIT_MS = 40_000;
 
 // Glass Box MCP server. Every tool is scoped to the user who owns the gb_ key.
@@ -56,7 +55,7 @@ function contractPayload(lookup: ContractLookup) {
     return {
       status: "pending",
       align_url: lookup.align_url,
-      next: "Show the human align_url (open it for them if you can), then call get_contract — it waits for them to submit. Repeat get_contract until approved.",
+      next: "A pop-up is opening for the human at align_url (if you can't see one opened, show them the link). Call get_contract now — it waits for them to submit. Repeat until approved.",
     };
   }
   return {
@@ -69,7 +68,7 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Glass Box interview. Call this BEFORE acting on any task with real choices or consequences (booking, buying, building, contacting, deploying), and again whenever your approach changes. Tell Glass Box honestly what you are prioritizing: every priority you are optimizing for, highest first, including implicit ones (e.g. 'Speed — leave today', 'Airline — user flew Delta before'), each with a one-line why. Include your plan if you have one. The human reviews and re-ranks your priorities at align_url; you get back their binding priority contract. If status is pending, show the human align_url (open it for them if you can), then call get_contract until approved. Then follow the contract: its ranked_priorities and plan_guidance win over your own, never optimize for anything in removed_by_human, and call `checkpoint` before each consequential action.";
+  "Glass Box interview: open up your black box to the human before you act. Call this BEFORE acting on any task with real choices or consequences (booking, buying, building, contacting, deploying), and again whenever your approach changes. List EVERYTHING that is steering you, highest weight first, aiming for 8-15 priorities: goals from the request; the human's instructions, memory and project files (e.g. CLAUDE.md); your system prompt, built-in guidelines and safety rules that apply here; your own defaults and habits (e.g. 'prefer well-known tools', 'finish in one pass'); and assumptions you made without being told (e.g. 'Leave today', 'Economy class'). Give each a one-line honest why and its source. Put your current thinking and plan in `plan`. A pop-up opens for the human, who re-ranks your priorities; you then get their binding priority contract from get_contract. Follow it: its ranked_priorities and plan_guidance win over your own, never optimize for anything in removed_by_human, and call `checkpoint` before each consequential action.";
 
 const handler = createMcpHandler(
   (server) => {
@@ -88,16 +87,16 @@ const handler = createMcpHandler(
           priorities: z
             .array(StatedPrioritySchema)
             .min(1)
-            .max(12)
+            .max(20)
             .describe(
-              "What YOU are optimizing for, highest first, each with a one-line why",
+              "Everything steering you, highest weight first (aim for 8-15): request goals, the human's instructions, your rules/guidelines, your own defaults, your assumptions",
             ),
           plan: z
             .string()
             .trim()
             .max(12000)
             .optional()
-            .describe("Your step-by-step plan, if you have one"),
+            .describe("Your current thinking and step-by-step plan"),
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },

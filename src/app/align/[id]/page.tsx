@@ -32,7 +32,7 @@ export default async function AlignPage({
 
   const { data: review, error } = await supabase
     .from("reviews")
-    .select("id, agent_name, task, status, stated, critique, created_at")
+    .select("id, agent_name, task, plan, status, stated, critique, created_at")
     .eq("id", id)
     .maybeSingle();
   if (error)
