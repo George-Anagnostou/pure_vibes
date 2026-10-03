@@ -11,7 +11,10 @@ const groups = {
 
 let valid = true;
 for (const [group, keys] of Object.entries(groups)) {
-  const missing = keys.filter((key) => !process.env[key]?.trim());
+  const missing = keys.filter(
+    (key) =>
+      !process.env[key]?.trim() || process.env[key]?.trim() === "[SENSITIVE]",
+  );
   console.log(
     `${group}: ${missing.length ? `missing ${missing.join(", ")}` : "variables present (connectivity not tested)"}`,
   );

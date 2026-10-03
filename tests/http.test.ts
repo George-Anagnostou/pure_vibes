@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import Stripe from "stripe";
 import {
   assertSameOrigin,
   errorResponse,
@@ -10,6 +11,29 @@ import {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("request boundaries", () => {
+  it("logs Stripe diagnostic codes without logging provider messages or credentials", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = errorResponse(
+      new Stripe.errors.StripeAuthenticationError({
+        message: "Invalid key sk_test_private",
+        code: "api_key_expired",
+        requestId: "req_test",
+        statusCode: 401,
+      }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      "request_failed",
+      expect.objectContaining({
+        type: "StripeAuthenticationError",
+        providerCode: "api_key_expired",
+        providerRequestId: "req_test",
+      }),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain("sk_test_private");
+    expect(await response.text()).not.toContain("api_key_expired");
+    log.mockRestore();
+  });
+
   it("rejects foreign or absent origins even with a forged Host header", () => {
     vi.stubEnv("APP_URL", "https://app.example.com");
     for (const origin of [

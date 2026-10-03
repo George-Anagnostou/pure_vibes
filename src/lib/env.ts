@@ -1,9 +1,16 @@
 import "server-only";
 import { z } from "zod";
 
+export class ConfigurationError extends Error {
+  constructor(public variable: string) {
+    super(`Missing environment variable: ${variable}`);
+    this.name = "ConfigurationError";
+  }
+}
+
 export function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing environment variable: ${name}`);
+  if (!value || value === "[SENSITIVE]") throw new ConfigurationError(name);
   return value;
 }
 
