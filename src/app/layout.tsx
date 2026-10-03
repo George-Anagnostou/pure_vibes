@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { SiteNav } from "@/components/site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GlassBox",
+  title: "Glass Box",
   description:
-    "Make AI agent work visible, understandable, and easier for people to guide.",
+    "Guardrails tell an agent what it can't do. Glass Box tells it what you actually care about.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
@@ -12,7 +19,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-dvh">
+        <SiteNav />
+        {children}
+      </body>
     </html>
   );
 }

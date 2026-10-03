@@ -2,9 +2,9 @@
 
 GlassBox is the opposite of a black box: it makes AI agent work visible and understandable, helping people inspect and guide agents for better human-agent alignment. The canonical repository is `George-Anagnostou/pure_vibes`.
 
-## Current app foundation
+## Current product prototype
 
-This repository currently contains the Next.js + TypeScript foundation and developer console for Vercel, Supabase, Stripe, and AI workflows. It is an integration foundation—not yet the finished GlassBox visualization experience. Start with:
+This repository contains a Next.js + TypeScript GlassBox prototype built on Vercel, Supabase, Stripe, and AI workflows. Its align, inbox, and agent flows demonstrate the product direction; the complete visualization experience and launch-ready workflows are still in development. Start with:
 
 ```bash
 nvm use

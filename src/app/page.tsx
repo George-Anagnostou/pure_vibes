@@ -1,7 +1,28 @@
+import Link from "next/link";
+import { ResumeAfterSignIn, SignOutButton } from "@/components/session-actions";
+import { SignInForm } from "@/components/sign-in-form";
 import { createClient } from "@/lib/supabase/server";
-import { DeveloperConsole } from "@/components/developer-console";
 
 export const dynamic = "force-dynamic";
+
+async function currentEmail(): Promise<{
+  email: string | null;
+  failed: boolean;
+}> {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  )
+    return { email: null, failed: true };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    const failed = Boolean(error && error.name !== "AuthSessionMissingError");
+    return { email: data.user?.email ?? null, failed };
+  } catch {
+    return { email: null, failed: true };
+  }
+}
 
 export default async function Home({
   searchParams,
@@ -9,91 +30,53 @@ export default async function Home({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const configured = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  );
-  let email: string | null = null;
-  let billing = "No subscription synced yet.";
-  let connectionError = false;
-  if (configured) {
-    try {
-      const supabase = await createClient();
-      const { data, error } = await supabase.auth.getUser();
-      if (error && error.name !== "AuthSessionMissingError")
-        connectionError = true;
-      email = data.user?.email ?? null;
-      if (data.user) {
-        const { data: subscriptions, error: dbError } = await supabase
-          .from("subscriptions")
-          .select("status")
-          .order("updated_at", { ascending: false })
-          .limit(5);
-        if (dbError) connectionError = true;
-        else if (subscriptions.length)
-          billing = subscriptions.map((s) => s.status).join(", ");
-      }
-    } catch {
-      connectionError = true;
-    }
-  }
+  const { email, failed } = await currentEmail();
+
   return (
-    <main>
-      <h1>GlassBox</h1>
-      <p className="muted">
-        GlassBox makes agent work visible so people can understand, guide, and
-        align with AI. This developer console currently exercises the shared
-        auth, workflow, and billing foundation; product visualizations are in
-        development.
+    <main className="mx-auto max-w-lg px-4 pt-12 pb-16">
+      <h1 className="text-3xl leading-tight font-black tracking-tight sm:text-4xl">
+        Before your agent acts, it checks what you actually care about.
+      </h1>
+      <p className="mt-3 text-lg text-ink-soft">
+        Your agent shares its priorities. You put them in order. It follows your
+        order.
       </p>
-      {!configured && (
-        <div className="notice">
-          <strong>Start with your environment.</strong>
-          <p>
-            Run <code>npm run setup</code>, fill in <code>.env.local</code>, and
-            restart the dev server. Follow <code>docs/TEAM_SETUP.md</code> to
-            connect the team’s accounts.
-          </p>
-        </div>
-      )}
-      {connectionError && (
-        <p className="notice error" role="alert">
-          Supabase could not load your session or database. Check the project
-          keys and apply the migration in <code>supabase/migrations</code>.
-        </p>
-      )}
+
       {params.auth === "error" && (
-        <p className="notice error" role="alert">
-          That sign-in link could not be verified. Request another link and open
-          it in the same browser.
+        <p
+          role="alert"
+          className="mt-6 rounded-xl bg-stop-bg p-4 font-semibold text-stop"
+        >
+          That sign-in link could not be verified. Request another and open it
+          in this browser.
         </p>
       )}
-      {params.billing === "success" && (
-        <p className="notice" role="status">
-          You returned from Checkout. Billing access is confirmed by the
-          webhook; refresh shortly to see the synced status.
+      {failed && (
+        <p
+          role="alert"
+          className="mt-6 rounded-xl bg-warn-bg p-4 font-semibold text-warn"
+        >
+          Can&apos;t reach the server right now. Refresh in a moment.
         </p>
       )}
-      {params.billing === "cancelled" && (
-        <p className="notice">
-          Checkout was cancelled. You can try again below.
-        </p>
-      )}
-      <DeveloperConsole
-        configured={configured}
-        email={email}
-        billing={billing}
-      />
-      <section>
-        <h2>Team handoff</h2>
-        <p>
-          Setup and invitations: <code>docs/TEAM_SETUP.md</code>
-          <br />
-          Integration boundaries: <code>docs/ARCHITECTURE.md</code>
-        </p>
-        <p>
-          <a href="/api/health">Check app health</a>
-        </p>
+
+      <section className="mt-8">
+        {email ? (
+          <>
+            <ResumeAfterSignIn />
+            <Link
+              href="/inbox"
+              className="block rounded-xl bg-ink px-5 py-4 text-center text-lg font-bold text-white hover:bg-ink/85"
+            >
+              Open your inbox
+            </Link>
+            <p className="mt-3 text-center text-sm text-ink-soft">
+              Signed in as {email} · <SignOutButton />
+            </p>
+          </>
+        ) : (
+          <SignInForm />
+        )}
       </section>
     </main>
   );

@@ -34,5 +34,12 @@ export const config = {
     "/api/auth/:path*",
     "/api/workflows/:path*",
     "/api/billing/:path*",
+    "/approve/:path*",
+    "/align/:path*",
+    "/inbox/:path*",
+    "/profile/:path*",
+    "/dashboard/:path*",
+    "/api/reviews/:path*",
+    "/api/agent-keys/:path*",
   ],
 };
