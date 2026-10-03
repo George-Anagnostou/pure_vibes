@@ -60,9 +60,20 @@ rm glassbox-install.mjs
 Then tell me to restart Claude Code in this folder and approve the "glassbox" MCP server if asked. After the restart, run /mcp to confirm glassbox is connected.`;
 }
 
+// One terminal line: /install downloads and runs the agent kit installer.
+export function installCommand(origin: string, key: string) {
+  return `curl -fsSL ${origin}/install | sh -s -- ${key}`;
+}
+
 export function setupSnippets(origin: string, key: string) {
   const mcpUrl = `${origin}/api/mcp/mcp`;
   return [
+    {
+      id: "terminal",
+      title: "Quickest: one line in your terminal",
+      hint: `Run in your project folder. Sets up Glass Box for Claude Code (needs Node 18+). To keep the key out of your shell history, run "curl -fsSL ${origin}/install | sh" and paste the key when asked.`,
+      code: installCommand(origin, key),
+    },
     {
       id: "paste",
       title: "Easiest: paste this into your agent",
