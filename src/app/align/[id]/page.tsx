@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  isReady,
   readAnswers,
   readStrings,
   STATUS_LABEL,
 } from "@/components/align-data";
 import { AlignPanel, FinalDecisions } from "@/components/align-panel";
+import { WaitingForAgent } from "@/components/waiting-for-agent";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,7 +39,7 @@ export default async function AlignPage({
   const { data: review, error } = await supabase
     .from("reviews")
     .select(
-      "id, agent_name, task, plan, status, stated, priorities, critique, created_at",
+      "id, agent_name, task, plan, status, stated, priorities, understanding, challenge_answers, answered_at, critique, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -55,7 +57,7 @@ export default async function AlignPage({
       ? (
           await supabase
             .from("contracts")
-            .select("decisions, added_by_human")
+            .select("decisions, added_by_human, challenges")
             .eq("review_id", id)
             .maybeSingle()
         ).data
@@ -69,7 +71,9 @@ export default async function AlignPage({
       </p>
 
       <div className="mt-6">
-        {review.status === "pending" ? (
+        {review.status === "pending" && !isReady(review) ? (
+          <WaitingForAgent agentName={review.agent_name} />
+        ) : review.status === "pending" ? (
           <AlignPanel review={review} />
         ) : (
           <section className="space-y-4">

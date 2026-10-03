@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { STATUS_LABEL, type AlignReview } from "@/components/align-data";
+import {
+  isReady,
+  STATUS_LABEL,
+  type AlignReview,
+} from "@/components/align-data";
 import { AlignPanel } from "@/components/align-panel";
 import { ConnectAgent } from "@/components/connect-agent";
 import { createClient } from "@/lib/supabase/client";
@@ -28,7 +32,9 @@ export function Inbox(props: {
 }) {
   const [reviews, setReviews] = useState(props.initialReviews);
   const [activeId, setActiveId] = useState<string | null>(
-    () => props.initialReviews.find((r) => r.status === "pending")?.id ?? null,
+    () =>
+      props.initialReviews.find((r) => r.status === "pending" && isReady(r))
+        ?.id ?? null,
   );
   const [live, setLive] = useState<Live>("connecting");
   const [permission, requestPermission] = useNotificationPermission();
@@ -88,8 +94,13 @@ export function Inbox(props: {
             if (payload.eventType === "DELETE") return;
             const row = payload.new as AlignReview;
             setReviews((prev) => upsert(prev, row));
-            if (payload.eventType === "INSERT" && row.status === "pending")
-              onNewRequest(row);
+            // Pop up once the agent has answered Glass Box's challenges (or had none).
+            const old = payload.old as Partial<AlignReview> | undefined;
+            const becameReady =
+              row.status === "pending" &&
+              isReady(row) &&
+              (payload.eventType === "INSERT" || !old?.answered_at);
+            if (becameReady) onNewRequest(row);
           },
         )
         .subscribe((status) => {

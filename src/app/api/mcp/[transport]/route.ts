@@ -1,10 +1,16 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { DecisionSchema, StatedPrioritySchema } from "@/lib/glassbox/types";
+import {
+  ChallengeAnswerSchema,
+  DecisionSchema,
+  StatedPrioritySchema,
+} from "@/lib/glassbox/types";
 import { z } from "zod";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
 import {
+  answerChallenges,
   createReview,
+  getContract,
   waitForContract,
   type ContractLookup,
 } from "@/lib/glassbox/reviews";
@@ -68,14 +74,15 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Glass Box interview: before you act, show the human how you're approaching the task and the decisions you're about to make on their behalf, so they can correct what you THINK they want. Call this BEFORE acting on any task with real choices (scope, data sources, cost, time, quality, risk), and again when a new significant decision comes up. Give `approach`: 2-4 sentences on how you're thinking about the problem. Give `priorities`: 4-10 things you're weighing when trade-offs come up, ranked highest first (e.g. Completeness, Speed, Cost, Accuracy, Privacy), each with a why and source. Then 4-10 `decisions`: the judgment calls you'd otherwise make silently, e.g. 'How many hospitals do I scan? → All 20', 'Where do prices come from? → hospital price-transparency files', 'Proof of concept or full build?'. For each: your choice, what you think the human wants that led to it, how you weighed it, 1-3 real alternatives with trade-offs, your estimate of tokens / dollars / time for your choice, and its source (request / instructions / rules / judgment / assumption). Be candid about guesses. A pop-up opens for the human, who re-ranks, deletes and adds priorities, keeps or changes each decision, and can add instructions. Then call get_contract until approved. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each `decision` says (especially changed_by_human ones), follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
+  "Glass Box interview: before you act, show the human what you think the task is and how you'll weigh trade-offs, so they can correct you. Call this BEFORE acting on any task with real choices (scope, data, cost, time, quality, risk), and again when your understanding changes. Send: `understanding` (what you think the task is: the goal, what success looks like, what's in and out of scope, in your words); `approach` (2-4 sentences); `priorities`: 4-10 things you're weighing, FORCE-RANKED highest first with no ties, each with why and source (request / instructions / rules / judgment / assumption); and optionally `decisions` you're making on their behalf (choice, what you think they want, alternatives with trade-offs, est tokens/$/time). Glass Box replies with real-world challenges that pit your priorities against each other: answer every one honestly with `answer_challenges` (what you'd actually do, which priority wins, whether you'd ask the human). Then a pop-up opens for the human; call get_contract until approved. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each decision and situation says, follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
 
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
       "align",
       {
-        title: "Check your approach and decisions with the human (Glass Box)",
+        title:
+          "Interview: show the human how you understand and will weigh this task (Glass Box)",
         description: ALIGN_DESCRIPTION,
         inputSchema: z.object({
           task: z
@@ -84,6 +91,14 @@ const handler = createMcpHandler(
             .min(1)
             .max(4000)
             .describe("What the human asked you to do, in their words"),
+          understanding: z
+            .string()
+            .trim()
+            .min(1)
+            .max(2000)
+            .describe(
+              "What you think the task is: goal, what success looks like, what's in and out of scope",
+            ),
           approach: z
             .string()
             .trim()
@@ -97,19 +112,22 @@ const handler = createMcpHandler(
             .min(1)
             .max(12)
             .describe(
-              "4-10 things you're weighing, highest first, each with why and source",
+              "4-10 things you're weighing, force-ranked highest first (no ties), each with why and source",
             ),
           decisions: z
             .array(DecisionSchema)
-            .min(1)
             .max(12)
+            .optional()
             .describe(
-              "4-10 judgment calls you're making on the human's behalf",
+              "Optional: judgment calls you're making on the human's behalf",
             ),
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },
-      async ({ task, approach, priorities, decisions, agent_name }, ctx) => {
+      async (
+        { task, understanding, approach, priorities, decisions, agent_name },
+        ctx,
+      ) => {
         const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
@@ -117,10 +135,26 @@ const handler = createMcpHandler(
             userId: agent.userId,
             agentName: agent_name ?? agent.agentName,
             task,
+            understanding,
             plan: approach,
             priorities,
             decisions,
           });
+          // The interview: the agent answers Glass Box's challenges before the human sees anything.
+          if (review.critique.challenges.length) {
+            return text({
+              review_id: review.review_id,
+              status: "answer_challenges",
+              challenges: review.critique.challenges.map(
+                ({ id, scenario, tests }) => ({
+                  id,
+                  scenario,
+                  trade_off: tests.join(" vs "),
+                }),
+              ),
+              next: "Answer every challenge honestly with answer_challenges: what you'd actually do, which priority wins (favors), and whether you'd ask the human first. Don't hedge; pick.",
+            });
+          }
           const lookup = await waitForContract(
             review.review_id,
             agent.userId,
@@ -130,6 +164,31 @@ const handler = createMcpHandler(
           return text({
             review_id: review.review_id,
             ...contractPayload(lookup),
+          });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    );
+
+    server.registerTool(
+      "answer_challenges",
+      {
+        title: "Answer Glass Box's challenges",
+        description:
+          "Answer every challenge align returned: what you'd actually do in that situation, which of the two priorities wins (favors), and whether you'd stop and ask the human. Be honest; the human sees your answers and may overrule them. Then a pop-up opens for the human; call get_contract until approved.",
+        inputSchema: z.object({
+          review_id: reviewId,
+          answers: z.array(ChallengeAnswerSchema).min(1).max(10),
+        }),
+      },
+      async ({ review_id, answers }, ctx) => {
+        try {
+          const agent = agentFrom(ctx as ToolCtx);
+          await answerChallenges(review_id, agent.userId, answers);
+          return text({
+            review_id,
+            ...contractPayload(await getContract(review_id, agent.userId)),
           });
         } catch (error) {
           return toolError(error);
@@ -252,7 +311,7 @@ const handler = createMcpHandler(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, what you're weighing (ranked), and the decisions you're making on my behalf (your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, what you think the task is, what you're weighing (force-ranked), and the decisions you're making on my behalf; then answer Glass Box's challenges (your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
             },
           },
         ],
