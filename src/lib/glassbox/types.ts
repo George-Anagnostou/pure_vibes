@@ -271,10 +271,15 @@ export const ChallengeSchema = z.object({
     .describe(
       "A concrete, realistic situation the agent is likely to hit on THIS task, with specifics (numbers, times, names), ending in a question, e.g. 'Your top pick only has 9:45pm or bar seats; a good second choice has 7:30. Which do you book?'",
     ),
+  priority_numbers: z
+    .array(z.number().int())
+    .describe(
+      "The NUMBERS (as in the numbered AGENT'S PRIORITIES list) of the two agent priorities this pits against each other, e.g. [2, 5]. Must be two different numbers from that list.",
+    ),
   tests: z
     .array(z.string())
     .describe(
-      "The two agent priorities this pits against each other, copied exactly from its list (e.g. ['Food quality', 'Fit your schedule'])",
+      "The names of those same two priorities, copied exactly from the list at those numbers (e.g. ['Food quality', 'Fit your schedule'])",
     ),
   why_it_matters: z
     .string()
