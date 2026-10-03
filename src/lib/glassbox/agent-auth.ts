@@ -13,8 +13,15 @@ export function newAgentKey() {
 }
 
 export async function requireAgent(request: Request) {
-  const key = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  if (!key?.startsWith("gb_")) throw new HttpError(401, "Missing Glass Box agent key (Authorization: Bearer gb_...).");
+  const key = request.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
+  if (!key?.startsWith("gb_"))
+    throw new HttpError(
+      401,
+      "Missing Glass Box agent key (Authorization: Bearer gb_...).",
+    );
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("agent_keys")
@@ -23,6 +30,14 @@ export async function requireAgent(request: Request) {
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new HttpError(401, "Unknown Glass Box agent key.");
-  await admin.from("agent_keys").update({ last_used_at: new Date().toISOString() }).eq("id", data.id);
-  return { agentKeyId: data.id, userId: data.user_id, agentName: data.name, admin };
+  await admin
+    .from("agent_keys")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", data.id);
+  return {
+    agentKeyId: data.id,
+    userId: data.user_id,
+    agentName: data.name,
+    admin,
+  };
 }

@@ -12,11 +12,15 @@ const Body = z.object({
 });
 
 // POST /api/reviews/{id}/checkpoint — agent asks "may I do this?" before acting.
-export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   try {
     const { userId } = await requireAgent(request);
     const { id } = await ctx.params;
-    if (!z.uuid().safeParse(id).success) throw new HttpError(404, "Review not found.");
+    if (!z.uuid().safeParse(id).success)
+      throw new HttpError(404, "Review not found.");
     const body = await readJson(request, Body);
     return json(await runCheckpoint(id, userId, body));
   } catch (error) {

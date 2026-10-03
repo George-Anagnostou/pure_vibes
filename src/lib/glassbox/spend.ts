@@ -23,15 +23,29 @@ export type SpendResult = {
   payment_intent_id?: string;
 };
 
-export async function requestSpend(reviewId: string, userId: string, amountCents: number, purpose: string): Promise<SpendResult> {
-  if (!Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 10_000_000) {
+export async function requestSpend(
+  reviewId: string,
+  userId: string,
+  amountCents: number,
+  purpose: string,
+): Promise<SpendResult> {
+  if (
+    !Number.isInteger(amountCents) ||
+    amountCents <= 0 ||
+    amountCents > 10_000_000
+  ) {
     throw new HttpError(400, "amount_cents must be a positive integer.");
   }
   const cleanPurpose = purpose.trim().slice(0, 300);
   if (!cleanPurpose) throw new HttpError(400, "purpose is required.");
 
   const admin = createAdminClient();
-  const { data: review, error } = await admin.from("reviews").select("id").eq("id", reviewId).eq("user_id", userId).maybeSingle();
+  const { data: review, error } = await admin
+    .from("reviews")
+    .select("id")
+    .eq("id", reviewId)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (error) throw error;
   if (!review) throw new HttpError(404, "Review not found.");
 
@@ -44,11 +58,21 @@ export async function requestSpend(reviewId: string, userId: string, amountCents
   const result = RpcResult.parse(data);
 
   if (!result.allowed || !result.spend_id) {
-    return { allowed: false, reason: result.reason ?? "Spend refused.", remaining_cents: result.remaining_cents, stripe: "not_attempted" };
+    return {
+      allowed: false,
+      reason: result.reason ?? "Spend refused.",
+      remaining_cents: result.remaining_cents,
+      stripe: "not_attempted",
+    };
   }
 
-  const approved = { allowed: true, spend_id: result.spend_id, remaining_cents: result.remaining_cents };
-  if (!process.env.STRIPE_SECRET_KEY?.trim()) return { ...approved, stripe: "skipped" };
+  const approved = {
+    allowed: true,
+    spend_id: result.spend_id,
+    remaining_cents: result.remaining_cents,
+  };
+  if (!process.env.STRIPE_SECRET_KEY?.trim())
+    return { ...approved, stripe: "skipped" };
 
   let paymentIntentId: string | undefined;
   let status: "succeeded" | "failed" = "failed";
@@ -68,7 +92,10 @@ export async function requestSpend(reviewId: string, userId: string, amountCents
     paymentIntentId = intent.id;
     status = intent.status === "succeeded" ? "succeeded" : "failed";
   } catch (stripeError) {
-    console.error("glassbox_spend_stripe_failed", { spendId: result.spend_id, type: stripeError instanceof Error ? stripeError.name : "Unknown" });
+    console.error("glassbox_spend_stripe_failed", {
+      spendId: result.spend_id,
+      type: stripeError instanceof Error ? stripeError.name : "Unknown",
+    });
   }
 
   const { error: updateError } = await admin
@@ -79,7 +106,17 @@ export async function requestSpend(reviewId: string, userId: string, amountCents
 
   if (status === "failed") {
     // A failed spend no longer counts against the budget (the RPC sums status <> 'failed').
-    return { allowed: false, reason: "The budget allowed this spend, but the test payment failed.", spend_id: result.spend_id, stripe: "failed", payment_intent_id: paymentIntentId };
+    return {
+      allowed: false,
+      reason: "The budget allowed this spend, but the test payment failed.",
+      spend_id: result.spend_id,
+      stripe: "failed",
+      payment_intent_id: paymentIntentId,
+    };
   }
-  return { ...approved, stripe: "succeeded", payment_intent_id: paymentIntentId };
+  return {
+    ...approved,
+    stripe: "succeeded",
+    payment_intent_id: paymentIntentId,
+  };
 }

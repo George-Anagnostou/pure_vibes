@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const { user } = await requireUser();
-    const { name } = await readJson(request, z.object({ name: z.string().trim().min(1).max(100) }));
+    const { name } = await readJson(
+      request,
+      z.object({ name: z.string().trim().min(1).max(100) }),
+    );
     const key = newAgentKey();
     const { error } = await createAdminClient()
       .from("agent_keys")

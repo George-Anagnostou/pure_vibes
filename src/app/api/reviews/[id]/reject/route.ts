@@ -3,7 +3,10 @@ import { assertSameOrigin, errorResponse, HttpError, json } from "@/lib/http";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   try {
     assertSameOrigin(request);
     const { supabase } = await requireUser();
