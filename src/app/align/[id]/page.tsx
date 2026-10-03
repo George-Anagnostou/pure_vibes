@@ -12,29 +12,12 @@ import { WaitingForAgent } from "@/components/waiting-for-agent";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
 import styles from "@/components/glassbox/glassbox.module.css";
 import local from "@/components/glassbox/align.module.css";
-import { glassboxFonts } from "@/components/glassbox/fonts";
-import { TopBar } from "@/components/glassbox/top-bar";
+import { Shell } from "@/components/glassbox/shell";
+import { summarize } from "@/lib/glassbox/summarize";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Glass Box" };
-
-// Headline voice from DESIGN.md: "Here is how i will approach [prompt summary]."
-// The summary is the task's first sentence, quoted, so imperatives read naturally.
-function summarize(task: string) {
-  const first = task.trim().split(/(?<=[.!?])\s/)[0] ?? task;
-  const short = first.length > 90 ? `${first.slice(0, 87).trimEnd()}…` : first;
-  return short.replace(/[.!?]$/, "");
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className={`${styles.page} ${glassboxFonts}`}>
-      <TopBar />
-      {children}
-    </div>
-  );
-}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -129,10 +112,10 @@ export default async function AlignPage({
             )}
             <p className="mt-6">
               <Link
-                href="/inbox"
+                href="/dashboard"
                 className={`${local.addButton} inline-block py-2`}
               >
-                Back to inbox
+                Back to dashboard
               </Link>
             </p>
           </section>

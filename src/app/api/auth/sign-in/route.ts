@@ -9,6 +9,9 @@ import {
 import { AUTH_NEXT_COOKIE, safeNextPath } from "@/lib/auth-navigation";
 import { NextResponse } from "next/server";
 
+const EMAIL_LIMIT_MESSAGE =
+  "We've hit our email limit for now. Try again in a little while, or if you already got an email, use the sign-in code in it.";
+
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
@@ -30,10 +33,12 @@ export async function POST(request: Request) {
         code: error.code,
         status: error.status,
       });
+      // 429 is usually Supabase's project-wide email cap (the built-in sender allows
+      // only a few emails per hour), not this user retrying too fast.
       throw new HttpError(
         error.status === 429 ? 429 : 503,
         error.status === 429
-          ? "Too many requests. Wait a minute before requesting another email."
+          ? EMAIL_LIMIT_MESSAGE
           : "We couldn't send your sign-in email. Try again shortly.",
       );
     }
