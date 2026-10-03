@@ -8,24 +8,57 @@ import {
   type AlignReview,
   type Suggestion,
 } from "@/components/align-data";
-import { RankList, type RankItem } from "@/components/rank-list";
-
-const AGENT = "agent:";
+import {
+  PriorityBoard,
+  type Board,
+  type BoardItem,
+} from "@/components/priority-board";
 
 type Phase =
   | { kind: "editing" }
   | { kind: "busy"; action: "send" | "reject" }
-  | { kind: "sent"; ranked: RankItem[] }
+  | { kind: "sent"; ranked: BoardItem[] }
   | { kind: "rejected" };
 
-type Decision = "accepted" | "dismissed";
-
-const ACTION_LABEL: Record<Suggestion["action"], string> = {
-  add: "Add",
-  drop: "Drop",
-  raise: "Raise",
-  lower: "Lower",
+const HINT: Record<Exclude<Suggestion["action"], "add">, string> = {
+  drop: "Maybe drop",
+  raise: "Maybe higher",
+  lower: "Maybe lower",
 };
+
+// Agent priorities start ranked (with Glass Box's nudges as hints); "add"
+// suggestions start in the "also consider" column.
+function initialBoard(review: AlignReview): Board {
+  const suggestions = readSuggestions(review.critique);
+  const ranked: BoardItem[] = readStated(review.stated).map((p) => {
+    const nudge = suggestions.find(
+      (s) => s.action !== "add" && samePriority(s.priority, p.name),
+    );
+    return {
+      id: `agent:${p.name}`,
+      name: p.name,
+      detail: p.why || undefined,
+      origin: "agent",
+      hint:
+        nudge && nudge.action !== "add"
+          ? `${HINT[nudge.action]}${nudge.why ? `: ${nudge.why}` : ""}`
+          : undefined,
+    };
+  });
+  const pool: BoardItem[] = suggestions
+    .filter(
+      (s) =>
+        s.action === "add" &&
+        !ranked.some((r) => samePriority(r.name, s.priority)),
+    )
+    .map((s) => ({
+      id: `suggested:${s.priority}`,
+      name: s.priority,
+      detail: s.why || undefined,
+      origin: "suggested",
+    }));
+  return { ranked, pool };
+}
 
 async function post(path: string, body: unknown) {
   const res = await fetch(path, {
@@ -39,8 +72,8 @@ async function post(path: string, body: unknown) {
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status}).`);
 }
 
-// The whole decision in one screen: re-rank the agent's priorities, accept or
-// dismiss Glass Box's suggestions, send. Used on /align/[id] and in the inbox.
+// The whole decision in one screen: drag the agent's priorities and Glass Box's
+// suggestions into a ranking, send. Used on /align/[id] and in the inbox.
 export function AlignPanel({
   review,
   onDone,
@@ -48,73 +81,28 @@ export function AlignPanel({
   review: AlignReview;
   onDone?: () => void;
 }) {
-  const [items, setItems] = useState<RankItem[]>(() =>
-    readStated(review.stated).map((p) => ({
-      id: `${AGENT}${p.name}`,
-      name: p.name,
-      detail: p.why || undefined,
-    })),
-  );
-  const [suggestions] = useState(() => readSuggestions(review.critique));
-  const [decisions, setDecisions] = useState<Record<number, Decision>>({});
-  const [removed, setRemoved] = useState<string[]>([]);
+  const [board, setBoard] = useState<Board>(() => initialBoard(review));
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [error, setError] = useState("");
 
-  const indexOf = (list: RankItem[], name: string) =>
-    list.findIndex((i) => samePriority(i.name, name));
-
-  function remove(list: RankItem[], id: string) {
-    const item = list.find((i) => i.id === id);
-    if (item?.id.startsWith(AGENT))
-      setRemoved((prev) => [...new Set([...prev, item.name])]);
-    return list.filter((i) => i.id !== id);
-  }
-
-  function accept(index: number, s: Suggestion) {
-    let next = items;
-    const at = indexOf(items, s.priority);
-    if (s.action === "add") {
-      if (at === -1)
-        next = [
-          ...items,
-          { id: `human:${s.priority}`, name: s.priority, tag: "Added" },
-        ];
-    } else if (at !== -1) {
-      if (s.action === "drop") {
-        if (items.length <= 1) {
-          setError("Keep at least one priority.");
-          return;
-        }
-        next = remove(items, items[at].id);
-      } else {
-        const [moved] = items.slice(at, at + 1);
-        const rest = items.filter((_, i) => i !== at);
-        next = s.action === "raise" ? [moved, ...rest] : [...rest, moved];
-      }
-    }
-    setError("");
-    setItems(next);
-    setDecisions((d) => ({ ...d, [index]: "accepted" }));
-  }
-
   async function send() {
-    if (!items.length) {
-      setError("Keep at least one priority.");
+    if (!board.ranked.length) {
+      setError("Rank at least one priority.");
       return;
     }
     setError("");
     setPhase({ kind: "busy", action: "send" });
-    const ranked = items.map((i) => i.name);
     try {
       await post(`/api/reviews/${review.id}/approve`, {
-        ranked_priorities: ranked,
-        added_by_human: items
-          .filter((i) => !i.id.startsWith(AGENT))
+        ranked_priorities: board.ranked.map((i) => i.name),
+        added_by_human: board.ranked
+          .filter((i) => i.origin === "suggested")
           .map((i) => i.name),
-        removed_by_human: removed.filter((r) => indexOf(items, r) === -1),
+        removed_by_human: board.pool
+          .filter((i) => i.origin === "agent")
+          .map((i) => i.name),
       });
-      setPhase({ kind: "sent", ranked: items });
+      setPhase({ kind: "sent", ranked: board.ranked });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not send.");
       setPhase({ kind: "editing" });
@@ -144,7 +132,12 @@ export function AlignPanel({
                 {review.agent_name} will follow your order.
               </p>
             </div>
-            <FinalList names={phase.ranked.map((i) => i.name)} />
+            <FinalList
+              names={phase.ranked.map((i) => i.name)}
+              added={phase.ranked
+                .filter((i) => i.origin === "suggested")
+                .map((i) => i.name)}
+            />
           </>
         ) : (
           <div>
@@ -190,60 +183,18 @@ export function AlignPanel({
   }
 
   const busy = phase.kind === "busy";
-  const open = suggestions
-    .map((s, i) => ({ s, i }))
-    .filter(({ i }) => !decisions[i]);
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <section aria-labelledby={`rank-${review.id}`}>
-        <h2
-          id={`rank-${review.id}`}
-          className="text-sm font-bold tracking-wide text-ink-soft uppercase"
-        >
-          What it&apos;s prioritizing
-        </h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Drag to reorder. The top one wins when they conflict.
+        <p id={`rank-${review.id}`} className="text-sm text-ink-soft">
+          Drag to rank what matters. Pull ideas in from the right, or drag a
+          priority out to drop it.
         </p>
         <div className="mt-3">
-          {items.length ? (
-            <RankList
-              items={items}
-              onChange={setItems}
-              onRemove={(id) => setItems(remove(items, id))}
-            />
-          ) : (
-            <p className="rounded-xl border-2 border-dashed border-line p-4 text-ink-soft">
-              The agent didn&apos;t list any priorities. Accept a suggestion
-              below to add one.
-            </p>
-          )}
+          <PriorityBoard board={board} onChange={setBoard} />
         </div>
       </section>
-
-      {open.length > 0 && (
-        <section aria-labelledby={`sugg-${review.id}`}>
-          <h2
-            id={`sugg-${review.id}`}
-            className="text-sm font-bold tracking-wide text-ink-soft uppercase"
-          >
-            Glass Box suggests
-          </h2>
-          <ul className="mt-3 space-y-2">
-            {open.map(({ s, i }) => (
-              <SuggestionCard
-                key={i}
-                suggestion={s}
-                onAccept={() => accept(i, s)}
-                onDismiss={() =>
-                  setDecisions((d) => ({ ...d, [i]: "dismissed" }))
-                }
-              />
-            ))}
-          </ul>
-        </section>
-      )}
 
       <div className="space-y-3">
         {error && (
@@ -277,48 +228,6 @@ export function AlignPanel({
         </p>
       </div>
     </div>
-  );
-}
-
-function SuggestionCard({
-  suggestion,
-  onAccept,
-  onDismiss,
-}: {
-  suggestion: Suggestion;
-  onAccept: () => void;
-  onDismiss: () => void;
-}) {
-  const add = suggestion.action === "add";
-  return (
-    <li className="rounded-xl border border-line bg-card p-4">
-      <p className="font-bold">
-        <span className={add ? "text-go" : "text-ink-soft"}>
-          {add ? "+ " : ""}
-          {ACTION_LABEL[suggestion.action]}
-        </span>{" "}
-        {suggestion.priority}
-      </p>
-      {suggestion.why && (
-        <p className="mt-1 text-sm text-ink-soft">{suggestion.why}</p>
-      )}
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={onAccept}
-          className="min-h-10 flex-1 rounded-lg bg-ink px-3 text-sm font-bold text-white hover:bg-ink/85"
-        >
-          Accept
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="min-h-10 flex-1 rounded-lg border border-line px-3 text-sm font-bold text-ink-soft hover:border-ink hover:text-ink"
-        >
-          Dismiss
-        </button>
-      </div>
-    </li>
   );
 }
 
