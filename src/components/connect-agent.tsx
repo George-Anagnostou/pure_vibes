@@ -224,8 +224,8 @@ export function ConnectAgent() {
   return (
     <div>
       <p className={styles.smallBody}>
-        Mint a key, then paste the block into your agent. The key is shown
-        once. Cursor, other MCP clients and the REST API are on{" "}
+        Mint a key, then paste the block into your agent. The key is shown once.
+        Cursor, other MCP clients and the REST API are on{" "}
         <Link href="/connect" className={styles.mutedLink}>
           Connect
         </Link>
@@ -261,8 +261,8 @@ export function AgentSetup({
       <section className={styles.optCard}>
         <h2 className={styles.connectLabel}>1. Mint an agent key</h2>
         <p className={styles.smallBody} style={{ margin: "0 0 12px" }}>
-          One key per agent or machine. Name it so you can recognize and
-          revoke it later.
+          One key per agent or machine. Name it so you can recognize and revoke
+          it later.
         </p>
         <MintForm state={state} onMint={mint} />
         {state.kind === "done" && (
@@ -281,8 +281,8 @@ export function AgentSetup({
             <>
               {" "}
               · snippets show{" "}
-              <code className="font-mono text-xs">{KEY_PLACEHOLDER}</code>{" "}
-              until you mint a key
+              <code className="font-mono text-xs">{KEY_PLACEHOLDER}</code> until
+              you mint a key
             </>
           )}
         </p>
@@ -304,13 +304,13 @@ export function AgentSetup({
       <section className={styles.optCard}>
         <h2 className={styles.connectLabel}>3. Give it a task</h2>
         <p className={styles.smallBody} style={{ margin: 0 }}>
-          Before acting, your agent calls <code>align</code> with its
-          approach. You get a pop-up on your{" "}
+          Before acting, your agent calls <code>align</code> with its approach.
+          You get a pop-up on your{" "}
           <Link href="/dashboard" className={styles.mutedLink}>
             dashboard
           </Link>{" "}
-          to correct the decisions it is making for you, and it follows what
-          you approve. In Claude Code you can also type{" "}
+          to correct the decisions it is making for you, and it follows what you
+          approve. In Claude Code you can also type{" "}
           <code>/mcp__glassbox__align</code> to make it realign.
         </p>
       </section>
