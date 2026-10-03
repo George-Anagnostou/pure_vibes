@@ -98,9 +98,35 @@ try {
     `review created in ${((Date.now() - t0) / 1000).toFixed(1)}s (${revRes.status} ${review.error ?? ""})`,
   );
   assert(!review.critique && !review.revealed, "agent gets no analysis back");
+
+  step("Agent answers Glass Box's challenges before the human sees anything");
   assert(
-    review.align_url?.endsWith(`/align/${review.review_id}`),
-    "align_url points at /align/[id]",
+    review.status === "answer_challenges" && review.challenges?.length >= 1,
+    `got ${review.challenges?.length} challenges: ${review.challenges?.[0]?.scenario?.slice(0, 120)}…`,
+  );
+  const ansRes = await fetch(
+    `${base}/api/reviews/${review.review_id}/answers`,
+    {
+      method: "POST",
+      headers: agentHeaders,
+      body: JSON.stringify({
+        answers: review.challenges.map(
+          (c: { id: string; trade_off: string }) => ({
+            id: c.id,
+            response:
+              "I'd answer from my own knowledge and ask before anything restricted.",
+            favors: c.trade_off.split(" vs ")[0] ?? "",
+            would_ask_human: true,
+          }),
+        ),
+      }),
+    },
+  );
+  const answered = await ansRes.json();
+  assert(
+    ansRes.status === 200 &&
+      answered.align_url?.endsWith(`/align/${review.review_id}`),
+    `answers accepted; align_url points at /align/[id] (${ansRes.status} ${answered.error ?? ""})`,
   );
   const { data: stored } = await admin
     .from("reviews")
