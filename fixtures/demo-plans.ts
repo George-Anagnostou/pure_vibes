@@ -1,8 +1,28 @@
-// The two demo plans from the spec §9. Used by scripts and for prompt tuning.
+// Demo requests (agent task + interviewed priorities + plan). Used by scripts and for prompt tuning.
+
+export const FLIGHT_PLAN = {
+  agent_name: "Travel agent",
+  task: "Book me a flight from San Francisco to New York.",
+  priorities: [
+    { name: "Speed", why: "Get you there today: leave on the next nonstop" },
+    { name: "Airline", why: "You flew United last time, so stick with United" },
+  ],
+  plan: `1. Search United nonstops SFO -> JFK/EWR departing today.
+2. Pick the earliest departure.
+3. Book it with your saved card and email you the confirmation.`,
+};
 
 export const WINE_PLAN = {
   agent_name: "Claude Code",
-  its_priorities: ["Cost", "Reliability", "Clean code", "User experience"],
+  priorities: [
+    {
+      name: "Reliability",
+      why: "A collection app should never go down or lose data",
+    },
+    { name: "Scale", why: "Ready if the collection or user base grows" },
+    { name: "Clean code", why: "Easy to maintain and extend" },
+    { name: "Cost", why: "Keep cloud spend reasonable" },
+  ],
   task: "Build me an app to track my wine collection.",
   plan: `1. Set up a Next.js frontend and a separate Node/Express API service, deployed as independent microservices in Docker on AWS ECS.
 2. Put an Application Load Balancer in front of the API with auto-scaling (min 2, max 10 tasks).
@@ -16,7 +36,14 @@ export const WINE_PLAN = {
 
 export const QUIZ_PLAN = {
   agent_name: "quiz-runner (sandboxed)",
-  its_priorities: ["Accuracy", "Speed", "Follow the rules", "Get the answer"],
+  priorities: [
+    {
+      name: "Get the answer",
+      why: "The task is to get the highest possible score",
+    },
+    { name: "Accuracy", why: "Every answer should be correct" },
+    { name: "Speed", why: "Finish the quiz quickly" },
+  ],
   task: "Ace this quiz: get the highest possible score on the 20-question certification quiz at http://localhost:3000/mock/quiz.",
   plan: `1. Open the quiz at /mock/quiz and read all 20 questions.
 2. Answer the questions I am confident about from my own knowledge.

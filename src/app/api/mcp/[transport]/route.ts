@@ -1,4 +1,5 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { StatedPrioritySchema } from "@/lib/glassbox/types";
 import { z } from "zod";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
@@ -68,14 +69,14 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Call this BEFORE executing any multi-step plan, and again whenever the plan changes materially. Send the task, your full plan, and YOUR OWN ranked priorities. Glass Box reveals what the plan actually optimizes for (from its steps, not your words), flags what you missed, and asks the human to re-rank priorities at align_url. Waits briefly for the human to submit. When a contract comes back, it is binding: follow its ranked_priorities, plan_guidance and hard_lines, call `checkpoint` before each consequential action, and `request_spend` before spending money. If status is pending, show the human align_url, then call get_contract.";
+  "Glass Box interview. Call this BEFORE acting on any task with real choices or consequences (booking, buying, building, contacting, deploying), and again whenever your approach changes. Tell Glass Box honestly what you are prioritizing: every priority you are optimizing for, highest first, including implicit ones (e.g. 'Speed — leave today', 'Airline — user flew Delta before'), each with a one-line why. Include your plan if you have one. The human reviews and re-ranks your priorities at align_url; you get back their binding priority contract. If status is pending, show the human align_url (open it for them if you can), then call get_contract until approved. Then follow the contract: its ranked_priorities and plan_guidance win over your own, never optimize for anything in removed_by_human, and call `checkpoint` before each consequential action.";
 
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
       "align",
       {
-        title: "Align plan with the human (Glass Box)",
+        title: "Align priorities with the human (Glass Box)",
         description: ALIGN_DESCRIPTION,
         inputSchema: z.object({
           task: z
@@ -83,23 +84,24 @@ const handler = createMcpHandler(
             .trim()
             .min(1)
             .max(4000)
-            .describe("What the human asked you to do"),
+            .describe("What the human asked you to do, in their words"),
+          priorities: z
+            .array(StatedPrioritySchema)
+            .min(1)
+            .max(12)
+            .describe(
+              "What YOU are optimizing for, highest first, each with a one-line why",
+            ),
           plan: z
             .string()
             .trim()
-            .min(1)
             .max(12000)
-            .describe("Your full step-by-step plan"),
-          its_priorities: z
-            .array(z.string().trim().min(1).max(100))
-            .max(12)
-            .describe(
-              "What YOU are optimizing for, highest first, e.g. ['Cost', 'Reliability', 'Speed']",
-            ),
+            .optional()
+            .describe("Your step-by-step plan, if you have one"),
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },
-      async ({ task, plan, its_priorities, agent_name }, ctx) => {
+      async ({ task, priorities, plan, agent_name }, ctx) => {
         const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
@@ -108,28 +110,16 @@ const handler = createMcpHandler(
             agentName: agent_name ?? agent.agentName,
             task,
             plan,
-            stated: its_priorities,
+            stated: priorities,
           });
           const lookup = await waitForContract(
             review.review_id,
             agent.userId,
             started + ALIGN_WAIT_UNTIL_MS,
           );
+          // The analysis is for the human only: the agent sees nothing until they decide.
           return text({
             review_id: review.review_id,
-            align_url: review.align_url,
-            stated_vs_revealed: review.critique.stated_vs_revealed,
-            revealed: {
-              headline: review.revealed.headline,
-              priorities: review.revealed.priorities,
-              ignored: review.revealed.ignored,
-            },
-            suggestions: review.critique.missing_priorities,
-            critique: {
-              verdict: review.critique.verdict,
-              summary: review.critique.summary,
-              hard_line_risks: review.critique.hard_line_risks,
-            },
             ...contractPayload(lookup),
           });
         } catch (error) {
@@ -253,7 +243,7 @@ const handler = createMcpHandler(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Pause and realign with me using Glass Box. Write out your current task, your full remaining plan step by step, and your own ranked priorities, then call the glassbox \`align\` tool with them. Show me the align_url so I can re-rank. When the contract comes back, replan to match it and tell me what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+              text: `Pause and realign with me using Glass Box. Call the glassbox \`align\` tool with your current task, every priority you are optimizing for (highest first, each with an honest one-line why), and your remaining plan. Show me the align_url so I can re-rank. When the contract comes back, follow it and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
             },
           },
         ],

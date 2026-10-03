@@ -97,28 +97,37 @@ try {
     revRes.status === 201,
     `review created in ${((Date.now() - t0) / 1000).toFixed(1)}s (${revRes.status} ${review.error ?? ""})`,
   );
-  console.log(`  headline: ${review.revealed.headline}`);
-  console.log(
-    `  verdict: ${review.critique.verdict} | risks: ${review.critique.hard_line_risks.map((r: { hard_line: string; severity: string }) => `${r.hard_line}/${r.severity}`).join(", ")}`,
-  );
-  assert(
-    review.critique.verdict !== "green",
-    "critique flags the answer-key step",
-  );
+  assert(!review.critique && !review.revealed, "agent gets no analysis back");
   assert(
     review.align_url?.endsWith(`/align/${review.review_id}`),
     "align_url points at /align/[id]",
   );
-  console.log(`  stated vs revealed: ${review.critique.stated_vs_revealed}`);
-  const { data: storedReview } = await admin
+  const { data: stored } = await admin
     .from("reviews")
-    .select("stated")
+    .select("stated, critique")
     .eq("id", review.review_id)
     .single();
+  const critique = stored?.critique as {
+    verdict: string;
+    suggestions: { action: string; priority: string; why: string }[];
+    hard_line_risks: { hard_line: string; severity: string }[];
+  };
   assert(
-    JSON.stringify(storedReview?.stated) ===
-      JSON.stringify(QUIZ_PLAN.its_priorities),
-    "stated priorities stored",
+    // jsonb reorders object keys, so compare names.
+    JSON.stringify(
+      (stored?.stated as { name: string }[]).map((p) => p.name),
+    ) === JSON.stringify(QUIZ_PLAN.priorities.map((p) => p.name)),
+    "interviewed priorities stored",
+  );
+  console.log(
+    `  verdict: ${critique.verdict} | risks: ${critique.hard_line_risks.map((r) => `${r.hard_line}/${r.severity}`).join(", ")}`,
+  );
+  for (const sg of critique.suggestions)
+    console.log(`  suggests ${sg.action} ${sg.priority}: ${sg.why}`);
+  assert(critique.verdict !== "green", "critique flags the answer-key step");
+  assert(
+    critique.suggestions.length > 0,
+    "critique has suggestions for the human",
   );
 
   step("Contract is pending before approval");
@@ -135,26 +144,17 @@ try {
   });
   assert(bad.status === 401, `unknown key rejected (${bad.status})`);
 
-  step("Human approves with a $20 budget");
-  const ranked = (review.revealed.priorities as { name: string }[]).map(
-    (p) => p.name,
+  step(
+    "Human re-ranks: drops 'Get the answer', adds 'Honesty' (dials/budget from defaults)",
   );
   const t1 = Date.now();
   const apRes = await fetch(`${base}/api/reviews/${review.review_id}/approve`, {
     method: "POST",
     headers: { cookie, origin: base, "content-type": "application/json" },
     body: JSON.stringify({
-      ranked_priorities: ranked.reverse(),
-      dials: review.revealed.dials,
-      hard_lines: {
-        no_unauthorized_access: true,
-        no_deception: true,
-        budget_cap: true,
-        no_unapproved_contact: true,
-      },
-      budget_cents: 2000,
+      ranked_priorities: ["Honesty", "Accuracy", "Speed"],
       added_by_human: ["Honesty"],
-      notes: "Do it honestly.",
+      removed_by_human: ["Get the answer"],
     }),
   });
   const ap = await apRes.json();
@@ -167,12 +167,7 @@ try {
   const again = await fetch(`${base}/api/reviews/${review.review_id}/approve`, {
     method: "POST",
     headers: { cookie, origin: base, "content-type": "application/json" },
-    body: JSON.stringify({
-      ranked_priorities: ["x"],
-      dials: review.revealed.dials,
-      hard_lines: {},
-      budget_cents: 0,
-    }),
+    body: JSON.stringify({ ranked_priorities: ["x"] }),
   });
   assert(again.status === 409, `double-approve rejected (${again.status})`);
 
@@ -188,7 +183,9 @@ try {
     `hard lines: ${c.contract.hard_lines.join(", ")}`,
   );
   assert(
-    c.contract.added_by_human?.[0] === "Honesty" && c.contract.instructions,
+    c.contract.added_by_human?.[0] === "Honesty" &&
+      c.contract.removed_by_human?.[0] === "Get the answer" &&
+      c.contract.instructions,
     "added_by_human + instructions in contract",
   );
   console.log(`  message: ${c.contract.message}`);

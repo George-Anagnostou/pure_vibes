@@ -21,7 +21,7 @@ export type ReviewRow = {
 };
 export type ContractRow = {
   id: string; review_id: string; user_id: string; ranked_priorities: Json; dials: Json; hard_lines: Json;
-  budget_cents: number; plan_guidance: string | null; notes: string | null; added_by_human: Json; created_at: string;
+  budget_cents: number; plan_guidance: string | null; notes: string | null; added_by_human: Json; removed_by_human: Json; created_at: string;
 };
 export type EventRow = { id: string; review_id: string; user_id: string; type: string; action: string; detail: Json; created_at: string };
 export type SpendRow = {
@@ -47,7 +47,7 @@ export type Database = {
     Views: { [_ in never]: never };
     Functions: {
       approve_review: {
-        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null; p_added_by_human?: Json };
+        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null; p_added_by_human?: Json; p_removed_by_human?: Json };
         Returns: string;
       };
       save_profile: { Args: { p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number }; Returns: undefined };
