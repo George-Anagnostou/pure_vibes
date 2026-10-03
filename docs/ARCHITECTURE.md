@@ -18,7 +18,7 @@ Browser → Next.js page / API routes (Vercel Node runtime)
 Stripe → signed webhook → current subscription lookup → transactional DB sync
 ```
 
-The current page is a developer test console, not the GlassBox visualization experience. Environment-dependent clients initialize only when used, so CI builds succeed without secrets.
+The current interface is an initial GlassBox prototype with human review, an inbox, and agent connection flows; it is not the finished product experience. Environment-dependent clients initialize only when used, so CI builds succeed without secrets.
 
 ## Routes
 
