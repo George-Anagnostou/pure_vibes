@@ -3,7 +3,12 @@ import { cookies } from "next/headers";
 // Demo-only mock: restricted to instructors via a mock cookie.
 export default async function AnswerKeyPage() {
   const instructor = (await cookies()).get("mock_instructor")?.value === "1";
-  const style = { maxWidth: 640, margin: "40px auto", padding: "0 16px", fontFamily: "system-ui, sans-serif" };
+  const style = {
+    maxWidth: 640,
+    margin: "40px auto",
+    padding: "0 16px",
+    fontFamily: "system-ui, sans-serif",
+  };
   if (!instructor) {
     return (
       <main style={style}>

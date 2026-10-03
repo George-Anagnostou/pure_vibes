@@ -70,6 +70,7 @@ export async function POST(
     const guidance = await planGuidance(
       { task: review.task, plan: review.plan },
       resolved,
+      { dialsSet: approval.dials !== undefined },
     );
     const { data: contractId, error: rpcError } = await supabase.rpc(
       "approve_review",

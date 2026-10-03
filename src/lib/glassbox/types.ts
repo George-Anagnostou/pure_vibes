@@ -39,10 +39,11 @@ export const DEFAULT_DIALS: Dials = {
   novelty: 0.5,
   autonomy: 0.5,
 };
+// budget_cap is off until the human sets a budget (the pop-up doesn't ask for one).
 export const DEFAULT_HARD_LINES: HardLines = {
   no_unauthorized_access: true,
   no_deception: true,
-  budget_cap: true,
+  budget_cap: false,
   no_unapproved_contact: true,
 };
 

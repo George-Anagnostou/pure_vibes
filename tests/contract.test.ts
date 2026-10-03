@@ -45,3 +45,36 @@ describe("statedNames", () => {
     expect(statedNames(null)).toEqual([]);
   });
 });
+
+vi.mock("@ai-sdk/anthropic", () => ({ anthropic: vi.fn() }));
+vi.mock("@ai-sdk/openai", () => ({ openai: vi.fn() }));
+
+describe("sanitizeSuggestions", async () => {
+  vi.doUnmock("@/lib/glassbox/llm");
+  const { sanitizeSuggestions } =
+    await vi.importActual<typeof import("@/lib/glassbox/llm")>(
+      "@/lib/glassbox/llm",
+    );
+  const stated = [
+    { name: "Speed", why: "" },
+    { name: "Airline", why: "" },
+  ];
+  it("drops suggestions that don't fit the agent's list", () => {
+    const out = sanitizeSuggestions(
+      [
+        { action: "add", priority: "Price", why: "" },
+        { action: "add", priority: "speed", why: "" },
+        { action: "raise", priority: "Speed", why: "" },
+        { action: "lower", priority: "Airline", why: "" },
+        { action: "drop", priority: "Airline", why: "" },
+        { action: "drop", priority: "Seat", why: "" },
+        { action: "add", priority: "Price", why: "" },
+      ],
+      stated,
+    );
+    expect(out.map((s) => `${s.action} ${s.priority}`)).toEqual([
+      "add Price",
+      "drop Airline",
+    ]);
+  });
+});

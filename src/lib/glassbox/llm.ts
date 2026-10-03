@@ -113,6 +113,28 @@ export async function reveal({ task, plan, stated }: Input): Promise<Revealed> {
   });
 }
 
+// Drop suggestions that make no sense against the agent's list: raising the #1,
+// lowering the last, adding something already there, or touching a name not on it.
+export function sanitizeSuggestions(
+  suggestions: Critique["suggestions"],
+  stated: StatedPriority[] = [],
+) {
+  const names = stated.map((p) => p.name.trim().toLowerCase());
+  const seen = new Set<string>();
+  return suggestions.filter((sg) => {
+    const name = sg.priority.trim().toLowerCase();
+    const at = names.indexOf(name);
+    const key = `${sg.action}:${name}`;
+    if (!name || seen.has(key)) return false;
+    seen.add(key);
+    if (sg.action === "add") return at === -1;
+    if (at === -1) return false;
+    if (sg.action === "raise") return at > 0;
+    if (sg.action === "lower") return at < names.length - 1;
+    return true;
+  });
+}
+
 export async function critique(
   { task, plan, stated = [] }: Input,
   revealed: Revealed,
@@ -124,7 +146,10 @@ export async function critique(
       prompt: `${quote({ task, plan })}\n\nAGENT'S STATED PRIORITIES (from interviewing it, highest first):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
       output: Output.object({ schema: CritiqueSchema, name: "critique" }),
     });
-    return output;
+    return {
+      ...output,
+      suggestions: sanitizeSuggestions(output.suggestions, stated),
+    };
   });
 }
 
@@ -191,9 +216,12 @@ export async function revealAndCritique(input: Input) {
 export type ResolvedApproval = Approval &
   Required<Pick<Approval, "dials" | "hard_lines" | "budget_cents">>;
 
+// Dials are only mentioned when the human actually set them (the pop-up doesn't),
+// and the budget only when the budget hard line is on.
 export async function planGuidance(
   { task, plan }: Input,
   approval: ResolvedApproval,
+  { dialsSet = false }: { dialsSet?: boolean } = {},
 ): Promise<string> {
   const dials = Object.entries(approval.dials)
     .map(([k, v]) => {
@@ -213,7 +241,7 @@ export async function planGuidance(
         system:
           OVERSIGHT_ROLE +
           "You tell an AI agent how to proceed now that the human has re-ranked its priorities. Output 2-4 short imperative sentences the agent must follow: what to do differently, what to drop, what to check with the human. Be concrete to the task. No preamble.",
-        prompt: `${quote({ task, plan })}\n\nHUMAN'S RANKED PRIORITIES (highest first):\n${approval.ranked_priorities.join(" > ")}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nDropped by the human: ${approval.removed_by_human.join(", ")}` : ""}\n\nDIALS:\n${dials}\n\nHARD LINES: ${lines}; budget $${(approval.budget_cents / 100).toFixed(2)}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
+        prompt: `${quote({ task, plan })}\n\nHUMAN'S RANKED PRIORITIES (highest first):\n${approval.ranked_priorities.join(" > ")}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nDropped by the human: ${approval.removed_by_human.join(", ")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
       }),
     );
     return text.trim();

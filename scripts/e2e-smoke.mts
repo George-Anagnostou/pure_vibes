@@ -179,7 +179,10 @@ try {
   ).json();
   assert(c.status === "approved", "contract approved");
   assert(
-    c.contract.hard_lines.includes("budget_max_cents:2000"),
+    c.contract.hard_lines.includes("no_unauthorized_access") &&
+      !c.contract.hard_lines.some((l: string) =>
+        l.startsWith("budget_max_cents"),
+      ),
     `hard lines: ${c.contract.hard_lines.join(", ")}`,
   );
   assert(
