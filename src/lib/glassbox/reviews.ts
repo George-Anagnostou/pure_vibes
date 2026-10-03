@@ -1,5 +1,6 @@
 import "server-only";
 import { appUrl } from "@/lib/env";
+import { HttpError } from "@/lib/http";
 import { revealAndCritique } from "@/lib/glassbox/llm";
 import type { Contract, Critique, Dials, Revealed, ReviewStatus } from "@/lib/glassbox/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -64,7 +65,7 @@ export async function getContract(reviewId: string, userId: string): Promise<Con
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
-  if (!review) throw new Error("Review not found");
+  if (!review) throw new HttpError(404, "Review not found.");
   if (review.status !== "approved") {
     return { status: review.status as Exclude<ReviewStatus, "approved">, approval_url: `${appUrl()}/approve/${reviewId}` };
   }

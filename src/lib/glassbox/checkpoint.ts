@@ -139,13 +139,7 @@ const EVENT_TYPE = { allow: "checkpoint_ok", warn: "drift", block: "breach" } as
 // Loads the approved contract for this agent's review, evaluates, and logs the
 // outcome to the events feed (allow -> checkpoint_ok, warn -> drift, block -> breach).
 export async function runCheckpoint(reviewId: string, userId: string, input: CheckpointInput): Promise<CheckpointDecision> {
-  let lookup;
-  try {
-    lookup = await getContract(reviewId, userId);
-  } catch (error) {
-    if (error instanceof Error && error.message === "Review not found") throw new HttpError(404, "Review not found.");
-    throw error;
-  }
+  const lookup = await getContract(reviewId, userId);
   if (lookup.status !== "approved") {
     return { decision: "block", reason: "No approved contract — call review_plan first" };
   }

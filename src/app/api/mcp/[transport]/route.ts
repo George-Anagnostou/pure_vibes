@@ -26,7 +26,6 @@ const text = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON
 function toolError(error: unknown) {
   let message = "Glass Box request failed. Try again.";
   if (error instanceof HttpError) message = error.message;
-  else if (error instanceof Error && error.message === "Review not found") message = "Review not found.";
   else console.error("glassbox_mcp_tool_failed", { type: error instanceof Error ? error.name : "Unknown" });
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }
