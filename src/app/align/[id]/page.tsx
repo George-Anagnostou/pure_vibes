@@ -91,14 +91,11 @@ export default async function AlignPage({
   return (
     <Shell>
       <div className={`${styles.alignShell} ${local.wideShell}`}>
-        <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
+        <h1
+          className={`${styles.taskHeader} ${styles.taskHeaderSolo} ${styles.pretty}`}
+        >
           Here is how <em>i</em> will approach “{summarize(review.task)}”
         </h1>
-        <p className={`${styles.agentName} [overflow-wrap:anywhere]`}>
-          {review.agent_name}
-          {summarize(review.task) !== review.task.trim() &&
-            ` · “${review.task.trim()}”`}
-        </p>
 
         {review.status === "pending" && !isReady(review) ? (
           <WaitingForAgent agentName={review.agent_name} />
