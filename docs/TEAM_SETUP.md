@@ -6,14 +6,14 @@ This is the shared foundation for George (`George-Anagnostou`), Kathryn (`kathry
 
 Existing subscriptions do not automatically grant API usage, project access, or team seats. Confirm each service's current plan permits the collaboration you need.
 
-| Service        | Owner setup                                                                           | Invite teammates / verify                                                                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub         | Canonical repository is `George-Anagnostou/pure_vibes`; default is `master`           | Grant Kathryn and Nick Write access; have them accept their invitations. `master` requires PRs, one approval, and `app`/`database` checks; force-push and deletion are disabled. |
-| Supabase       | Use the shared development project named `pure_vibes`; verify its org and project ref | Invite Kathryn and Nick to the organization/project with development access. Confirm they can open Auth, SQL, and logs.                                                          |
-| Stripe         | Select a shared sandbox or test-mode account                                          | Invite each teammate with a developer-appropriate role and sandbox access. Confirm who can create products and webhook destinations.                                             |
-| Vercel         | Import this GitHub repository into the intended team                                  | Invite both teammates with project/deployment access; connect their GitHub identities. Check team-seat/deploy-author requirements on your plan.                                  |
-| OpenAI         | Create/select an API project, enable billing, choose usage limits                     | Invite teammates to the project and create individual development keys. ChatGPT subscriptions do **not** include OpenAI API credit.                                              |
-| Secret manager | Create a shared development vault                                                     | Share project configuration through 1Password, Bitwarden, or your existing vault. Keep personal keys personal.                                                                   |
+| Service        | Owner setup                                                                 | Invite teammates / verify                                                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub         | Canonical repository is `George-Anagnostou/pure_vibes`; default is `master` | Grant Kathryn and Nick Write access; have them accept their invitations. `master` requires PRs, one approval, and `app`/`database` checks; force-push and deletion are disabled. |
+| Supabase       | Use `pure_vibes` (`wfnplnspktwjywrfanrr`, `us-east-2`)                      | Invite Kathryn and Nick to the organization/project with development access. Confirm they can open Auth, SQL, and logs.                                                          |
+| Stripe         | Select a shared sandbox or test-mode account                                | Invite each teammate with a developer-appropriate role and sandbox access. Confirm who can create products and webhook destinations.                                             |
+| Vercel         | Import this GitHub repository into the intended team                        | Invite both teammates with project/deployment access; connect their GitHub identities. Check team-seat/deploy-author requirements on your plan.                                  |
+| OpenAI         | Create/select an API project, enable billing, choose usage limits           | Invite teammates to the project and create individual development keys. ChatGPT subscriptions do **not** include OpenAI API credit.                                              |
+| Secret manager | Create a shared development vault                                           | Share project configuration through 1Password, Bitwarden, or your existing vault. Keep personal keys personal.                                                                   |
 
 File ownership and approvals are defined in the **Team ownership and product contract** section of `AGENTS.md`. GitHub Issues are available for coordination; check related open issues and PRs before starting overlapping work.
 
@@ -35,7 +35,7 @@ npm run db:push
 npm run db:types -- --linked
 ```
 
-Confirm the organization, dashboard, and project ref before linking; a project name alone is not enough. `supabase link` configures only this checkout and does not connect GitHub or deploy migrations. Confirm the linked target again before any push. Commit migrations and regenerated `src/types/database.ts` together. Each teammate links independently; CLI login/link state is local and ignored. CLI authentication is separate from app keys. Never edit a migration already pushed to the shared project; add a new migration.
+The verified hosted project is `pure_vibes` (`wfnplnspktwjywrfanrr`, `us-east-2`). Confirm the organization and dashboard if selecting a different project; a name alone is not enough. The repository's Supabase Preview integration also targets this project. `supabase link` configures only the local checkout and does not connect GitHub or deploy migrations. Confirm the linked target again before any push. Commit migrations and regenerated `src/types/database.ts` together. Each teammate links independently; CLI login/link state is local and ignored. CLI authentication is separate from app keys. Never edit a migration already pushed to the shared project; add a new migration.
 
 In Supabase **Project Settings → API / API Keys** (or the Connect dialog), copy:
 
