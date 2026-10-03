@@ -12,8 +12,19 @@ const norm = (s: string) => s.trim().toLowerCase();
 
 export function mismatch(c: UiChallenge, ranked: string[]) {
   if (!c.favors || c.tests.length < 2) return null;
-  const winner = c.tests.find((t) => norm(t) === norm(c.favors!));
-  const loser = c.tests.find((t) => norm(t) !== norm(c.favors!));
+  // The agent types `favors` freely ("Completeness", "completeness wins", "#1"), so
+  // match loosely: same name, one contains the other, or its priority number.
+  const num = /^#?(\d+)$/.exec(c.favors.trim())?.[1];
+  const named = num ? ranked[Number(num) - 1] : undefined;
+  const same = (t: string) => {
+    const [a, b] = [norm(t), norm(named ?? c.favors!)];
+    return (
+      a === b ||
+      (Math.min(a.length, b.length) >= 4 && (a.includes(b) || b.includes(a)))
+    );
+  };
+  const winner = c.tests.find(same);
+  const loser = c.tests.find((t) => t !== winner);
   if (!winner || !loser) return null;
   const w = ranked.findIndex((r) => norm(r) === norm(winner));
   const l = ranked.findIndex((r) => norm(r) === norm(loser));
