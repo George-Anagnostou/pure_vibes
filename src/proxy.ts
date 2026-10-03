@@ -31,6 +31,8 @@ export const config = {
   matcher: [
     "/",
     "/auth/:path*",
+    "/sign-in",
+    "/account/:path*",
     "/api/auth/:path*",
     "/api/workflows/:path*",
     "/api/billing/:path*",

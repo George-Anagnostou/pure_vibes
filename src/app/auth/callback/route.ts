@@ -1,29 +1,46 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { appUrl } from "@/lib/env";
+import { appUrl, trustedOrigins } from "@/lib/env";
+import { AUTH_NEXT_COOKIE, safeNextPath } from "@/lib/auth-navigation";
 
-const NO_STORE = { headers: { "Cache-Control": "private, no-store" } };
+const PRIVATE = {
+  headers: {
+    "Cache-Control": "private, no-store",
+    "Referrer-Policy": "no-referrer",
+  },
+};
 
-// Accepts both PKCE (?code=) and token-hash (?token_hash=&type=) sign-in links.
-// ?next=/inbox returns the human to where they were (same-origin paths only).
 export async function GET(request: Request) {
-  const params = new URL(request.url).searchParams;
-  const next = params.get("next");
-  const target = next?.startsWith("/") && !next.startsWith("//") ? next : "/";
-  const supabase = await createClient();
-
-  const code = params.get("code");
-  const tokenHash = params.get("token_hash");
-  const type = params.get("type") as EmailOtpType | null;
-  const { error } = code
-    ? await supabase.auth.exchangeCodeForSession(code)
-    : tokenHash && type
-      ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
-      : { error: new Error("missing code") };
-
-  return NextResponse.redirect(
-    error ? `${appUrl()}/?auth=error` : `${appUrl()}${target}`,
-    NO_STORE,
+  const url = new URL(request.url);
+  const origin = trustedOrigins().has(url.origin) ? url.origin : appUrl();
+  const cookieStore = await cookies();
+  const next = safeNextPath(
+    url.searchParams.get("next") ?? cookieStore.get(AUTH_NEXT_COOKIE)?.value,
   );
+  const tokenHash = url.searchParams.get("token_hash");
+  const type = url.searchParams.get("type");
+  // Email scanners can follow GET links. Consume the token only after a person
+  // presses Continue on the confirmation page (same-origin POST).
+  if (tokenHash && ["email", "signup", "magiclink"].includes(type ?? "")) {
+    const confirm = new URL("/auth/confirm", origin);
+    confirm.searchParams.set("token_hash", tokenHash);
+    confirm.searchParams.set("type", type!);
+    confirm.searchParams.set("next", next);
+    return NextResponse.redirect(confirm, PRIVATE);
+  }
+  const code = url.searchParams.get("code");
+  if (code) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      const response = NextResponse.redirect(new URL(next, origin), PRIVATE);
+      response.cookies.delete(AUTH_NEXT_COOKIE);
+      return response;
+    }
+  }
+  const retry = new URL("/sign-in", origin);
+  retry.searchParams.set("error", "link");
+  retry.searchParams.set("next", next);
+  return NextResponse.redirect(retry, PRIVATE);
 }

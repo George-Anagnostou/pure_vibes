@@ -46,8 +46,8 @@ export async function POST(request: Request) {
         client_reference_id: user.id,
         metadata: { price_id: price, plan_version: plan.version },
         subscription_data: { metadata: { supabase_user_id: user.id } },
-        success_url: `${appUrl()}/?billing=success`,
-        cancel_url: `${appUrl()}/?billing=cancelled`,
+        success_url: `${appUrl()}/account?billing=success`,
+        cancel_url: `${appUrl()}/account?billing=cancelled`,
       },
       {
         idempotencyKey: `checkout:${user.id}:${price}:${Math.floor(Date.now() / 1_800_000)}`,

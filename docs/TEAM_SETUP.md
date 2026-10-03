@@ -50,7 +50,28 @@ In **Authentication → URL Configuration**:
 - Allow `https://YOUR-APP.vercel.app/auth/callback`.
 - Add exact additional development origins as needed; keep them aligned with `APP_URL`.
 
-Enable the Email provider and keep its default magic-link email template. The scaffold uses the PKCE code callback; open the link in the **same browser** that requested it. Different browsers, stripped links, and mail scanners can invalidate the flow.
+Enable the Email provider and configure a custom SMTP sender first. The current
+free project/default sender rejects template changes and restricts recipients.
+In **Authentication → Email Templates**, set both
+**Magic Link** and **Confirm signup** to the HTML in
+`supabase/templates/magic-link.html` and `supabase/templates/confirmation.html`.
+These templates include a one-time code and a token-hash link to the callback.
+The link opens a confirmation page; only pressing Continue consumes it, so a
+mail scanner's GET request cannot spend the token. A code or token-hash link can
+be used in another browser. Existing PKCE links remain supported but require
+the browser that requested them.
+
+The app sends links back to the origin that requested sign-in, keeping PKCE
+cookies on that host. Allow each actual preview callback explicitly if testing
+sign-in on a preview. The app's `APP_URL` must be the exact stable production
+origin in Production and localhost in Development. Avoid broad redirect
+wildcards. `/sign-in` provides retry/code entry; `/account` shows the verified
+email, synced subscription status, and Stripe checkout/portal controls.
+
+Local Supabase loads the checked-in email templates from `supabase/config.toml`.
+Editing this file does **not** update the hosted project: apply the two template
+bodies and URL settings in its dashboard. Do not push the whole local config to
+hosted Auth, because it contains localhost settings.
 
 Supabase's default hosted email service restricts recipients and has low rate limits. Verify all three team addresses are allowed for development, or configure custom SMTP in Supabase Auth before testing with outside users. Auth signup is enabled by default; disable new signups after registering the team if this is a private demo.
 

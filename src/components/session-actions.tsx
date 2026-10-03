@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { safeNextPath } from "@/lib/auth-navigation";
 import { NEXT_PATH_KEY } from "@/components/sign-in-form";
 
 // After a magic-link sign-in lands on "/", continue to the page that asked.
@@ -15,8 +16,7 @@ export function ResumeAfterSignIn() {
     } catch {
       return;
     }
-    if (next && next.startsWith("/") && !next.startsWith("//"))
-      router.replace(next);
+    if (next) router.replace(safeNextPath(next));
   }, [router]);
   return null;
 }
@@ -33,10 +33,15 @@ export function SignOutButton() {
         onClick={async () => {
           setBusy(true);
           setError("");
-          const res = await fetch("/api/auth/sign-out", { method: "POST" });
-          setBusy(false);
-          if (res.ok) router.refresh();
-          else setError("Could not sign out. Try again.");
+          try {
+            const res = await fetch("/api/auth/sign-out", { method: "POST" });
+            if (!res.ok) throw new Error("Sign out failed");
+            router.refresh();
+          } catch {
+            setError("Could not sign out. Try again.");
+          } finally {
+            setBusy(false);
+          }
         }}
         className="text-sm font-semibold text-ink-soft underline underline-offset-4 hover:text-ink disabled:opacity-60"
       >

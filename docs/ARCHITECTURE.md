@@ -26,7 +26,9 @@ The current interface is an initial GlassBox prototype with human review, an inb
 | ---------------------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
 | `GET /api/health`            | App liveness only, no provider probe                  | Public                                                        |
 | `POST /api/auth/sign-in`     | `{ "email": "..." }` → magic link                     | Same origin; Supabase Auth limits                             |
-| `GET /auth/callback`         | Exchange PKCE code for session                        | Valid auth code                                               |
+| `GET /auth/callback`         | Exchange PKCE code or open token-hash confirmation    | Valid auth code / email link                                  |
+| `POST /api/auth/verify`      | Verify Supabase email code or token hash              | Same origin + valid one-time token                            |
+| `GET /account`               | Account, synced subscription, Stripe controls         | Verified user + RLS                                           |
 | `POST /api/auth/sign-out`    | Sign out this browser                                 | Same origin                                                   |
 | `GET /api/workflows`         | Latest 20 runs for this user                          | Verified user + RLS                                           |
 | `POST /api/workflows`        | `{ "brief": "..." }` → saved structured plan          | Same origin + verified user + quota (+ optional subscription) |

@@ -39,5 +39,13 @@ enable_signup = true
 enable_confirmations = true
 double_confirm_changes = true
 
+[auth.email.template.magic_link]
+subject = "Sign in to Glass Box"
+content_path = "./supabase/templates/magic-link.html"
+
+[auth.email.template.confirmation]
+subject = "Welcome to Glass Box"
+content_path = "./supabase/templates/confirmation.html"
+
 [analytics]
 enabled = false
