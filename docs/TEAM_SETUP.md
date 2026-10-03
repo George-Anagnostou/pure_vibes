@@ -55,11 +55,22 @@ sending domain. Sender: `Glass Box <signin@auth.glassbox.cards>`; host:
 `smtp.resend.com`; port: `465`; username: `resend`. Its password is a
 domain-scoped Resend sending key stored in Supabase Auth, never in this repo.
 Resend is provisioned through the existing Vercel project on its Free plan.
-The app origin is `https://glassbox.cards`; `auth.glassbox.cards` is the email
-sending subdomain. Supabase Site URL and the production `APP_URL` use the app
-origin; allow `https://glassbox.cards/auth/callback` as a redirect. Existing
-Vercel and localhost callbacks remain allowed for in-flight links/development.
-Production page requests on Vercel aliases redirect to the canonical app origin.
+The sender domain is independent of the website domain: removing its website
+alias does not remove the Resend DNS records. Set Supabase Site URL and the
+production `APP_URL` to the same active website origin, and allow that exact
+origin's `/auth/callback`. Preserve the existing Vercel and localhost callbacks
+for in-flight links/development. Production page requests on Vercel aliases
+redirect to the canonical app origin. The verified acceptance run used
+`https://pure-vibes-smoky.vercel.app`; coordinate any canonical-domain change
+with the team before redeploying.
+
+The hosted email allowance was raised from 2 to 30 emails/hour during setup;
+the per-user email cooldown remains 60 seconds. Resend Free also has its own
+sending quota. The acceptance run confirmed SMTP delivery to Resend's test
+recipient, browser magic-link sign-in/sign-out, one-time token replay rejection,
+account identity, an authenticated MCP handshake, and Stripe sandbox Checkout
+and portal session creation. A personal mailbox and completed payment were not
+tested in that run.
 
 For another Supabase project, enable Email auth and configure custom SMTP first.
 The default hosted sender restricts recipients and may reject template changes.
