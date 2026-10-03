@@ -16,7 +16,7 @@ import {
 // GLASSBOX_MODEL / GLASSBOX_FALLBACK_MODEL override the defaults below.
 type Provider = "openai" | "anthropic";
 const DEFAULTS: Record<Provider, { model: string; fallback: string }> = {
-  openai: { model: "gpt-4.1", fallback: "gpt-4.1-mini" },
+  openai: { model: "gpt-5.4-mini", fallback: "gpt-4.1" },
   anthropic: {
     model: "claude-sonnet-5-5",
     fallback: "claude-haiku-4-5-20251001",
