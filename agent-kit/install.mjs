@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_URL = "https://pure-vibes-smoky.vercel.app";
+const DEFAULT_URL = "https://glassbox.cards";
 const args = process.argv.slice(2);
 const flag = (name) => {
   const i = args.indexOf(name);
