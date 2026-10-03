@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
-import styles from "@/components/glassbox/glassbox.module.css";
 import { Shell } from "@/components/glassbox/shell";
 import { appUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
