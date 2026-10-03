@@ -24,6 +24,15 @@ describe("describeDecisions", () => {
       "The human changed 1 of 2 decisions: Scope → 3-hospital proof of concept. They also told you: Show me results before scaling.",
     );
   });
+  it("mentions situations the human overruled", () => {
+    expect(
+      describeDecisions([d("Scope", "All", false)], [], undefined, [
+        "Pick a price",
+      ]),
+    ).toBe(
+      "The human kept all 1 of your decisions. The human overruled you on 1 situation: do what `situations` says, not what you answered.",
+    );
+  });
   it("says when everything was kept", () => {
     expect(describeDecisions([d("Scope", "All", false)], [])).toBe(
       "The human kept all 1 of your decisions.",

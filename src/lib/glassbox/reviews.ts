@@ -113,6 +113,7 @@ export function describeDecisions(
     added: [],
     removed: [],
   },
+  overruled: string[] = [], // situations where the human told the agent to do something else
 ) {
   const parts: string[] = [];
   if (priorities.ranked.length) {
@@ -134,6 +135,10 @@ export function describeDecisions(
             .map((d) => `${d.topic} → ${d.answer}`)
             .join("; ")}.`
         : `The human kept all ${decisions.length} of your decisions.`,
+    );
+  if (overruled.length)
+    parts.push(
+      `The human overruled you on ${overruled.length} situation${overruled.length === 1 ? "" : "s"}: do what \`situations\` says, not what you answered.`,
     );
   if (instructions.length)
     parts.push(`They also told you: ${instructions.join("; ")}.`);
@@ -188,11 +193,12 @@ export function toContract(row: ContractRow): Contract {
     budget_cents: row.budget_cents,
     dials: row.dials as Dials,
     instructions: CONTRACT_INSTRUCTIONS,
-    message: describeDecisions(answers, instructions, {
-      ranked,
-      added,
-      removed,
-    }),
+    message: describeDecisions(
+      answers,
+      instructions,
+      { ranked, added, removed },
+      situations.filter((s) => s.human_overrode_you).map((s) => s.situation),
+    ),
   };
 }
 
