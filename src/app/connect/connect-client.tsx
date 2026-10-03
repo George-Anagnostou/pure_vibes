@@ -52,7 +52,7 @@ function KeyList({ keys }: { keys: AgentKeySummary[] }) {
   }
 
   return (
-    <section className={styles.optCard} style={{ marginTop: 16 }}>
+    <section className={styles.optCard}>
       <h2 className={styles.connectLabel}>Your agent keys</h2>
       {keys.length === 0 ? (
         <p className={styles.smallBody} style={{ margin: 0 }}>
