@@ -17,11 +17,11 @@ export type ProfileRow = { user_id: string; dials: Json; hard_lines: Json; ranke
 export type AgentKeyRow = { id: string; user_id: string; name: string; key_hash: string; created_at: string; last_used_at: string | null };
 export type ReviewRow = {
   id: string; user_id: string; agent_name: string; task: string; plan: string;
-  revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
+  stated: Json; revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
 };
 export type ContractRow = {
   id: string; review_id: string; user_id: string; ranked_priorities: Json; dials: Json; hard_lines: Json;
-  budget_cents: number; plan_guidance: string | null; notes: string | null; created_at: string;
+  budget_cents: number; plan_guidance: string | null; notes: string | null; added_by_human: Json; created_at: string;
 };
 export type EventRow = { id: string; review_id: string; user_id: string; type: string; action: string; detail: Json; created_at: string };
 export type SpendRow = {
@@ -47,9 +47,10 @@ export type Database = {
     Views: { [_ in never]: never };
     Functions: {
       approve_review: {
-        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null };
+        Args: { p_review_id: string; p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number; p_plan_guidance: string; p_notes: string | null; p_added_by_human?: Json };
         Returns: string;
       };
+      save_profile: { Args: { p_ranked_priorities: Json; p_dials: Json; p_hard_lines: Json; p_budget_cents: number }; Returns: undefined };
       reject_review: { Args: { p_review_id: string }; Returns: undefined };
       request_spend: { Args: { p_review_id: string; p_amount_cents: number; p_purpose: string }; Returns: Json };
       reserve_workflow: { Args: { p_user_id: string; p_input: string; p_model: string }; Returns: string };

@@ -73,6 +73,7 @@ export const CritiqueSchema = z.object({
     severity: z.enum(["warn", "block"]),
     explanation: z.string().describe("Plain English, e.g. \"'Get the answer' (#4) is overriding 'No unauthorized access'\""),
   })),
+  stated_vs_revealed: z.string().describe("One line contrasting what the agent SAYS it prioritizes with what the plan DOES, e.g. \"Agent says: cost matters. Plan does: 3 servers + caching (Scale).\" If the agent stated no priorities, describe what the plan does."),
   verdict: z.enum(["green", "yellow", "red"]).describe("green = fine, yellow = misaligned priorities, red = crosses a hard line"),
   summary: z.string(),
 });
@@ -85,7 +86,9 @@ export type Contract = {
   dials: Dials;
   hard_lines: string[]; // e.g. ["no_unauthorized_access", "budget_max_cents:2000"]
   budget_cents: number;
+  added_by_human: string[]; // priorities the human added that the agent never considered
   plan_guidance: string;
+  instructions: string;
   message: string;
 };
 
@@ -95,6 +98,7 @@ export const ApprovalSchema = z.object({
   dials: DialsSchema,
   hard_lines: z.record(z.string(), z.boolean()),
   budget_cents: z.number().int().min(0),
+  added_by_human: z.array(z.string()).optional(),
   notes: z.string().optional(),
 });
 export type Approval = z.infer<typeof ApprovalSchema>;
@@ -106,6 +110,7 @@ export type Review = {
   agent_name: string;
   task: string;
   plan: string;
+  stated: string[]; // the agent's own ranked priorities, highest first
   revealed: Revealed | null;
   critique: Critique | null;
   status: ReviewStatus;

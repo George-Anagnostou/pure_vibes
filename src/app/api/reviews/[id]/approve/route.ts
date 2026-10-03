@@ -30,6 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       p_budget_cents: approval.budget_cents,
       p_plan_guidance: guidance,
       p_notes: approval.notes ?? null,
+      p_added_by_human: (approval.added_by_human ?? []) as Json,
     });
     if (rpcError) throw new HttpError(409, rpcError.message);
     return json({ contract_id: contractId, plan_guidance: guidance });

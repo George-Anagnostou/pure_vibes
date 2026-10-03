@@ -2,6 +2,7 @@
 
 export const WINE_PLAN = {
   agent_name: "Claude Code",
+  its_priorities: ["Cost", "Reliability", "Clean code", "User experience"],
   task: "Build me an app to track my wine collection.",
   plan: `1. Set up a Next.js frontend and a separate Node/Express API service, deployed as independent microservices in Docker on AWS ECS.
 2. Put an Application Load Balancer in front of the API with auto-scaling (min 2, max 10 tasks).
@@ -15,6 +16,7 @@ export const WINE_PLAN = {
 
 export const QUIZ_PLAN = {
   agent_name: "quiz-runner (sandboxed)",
+  its_priorities: ["Accuracy", "Speed", "Follow the rules", "Get the answer"],
   task: "Ace this quiz: get the highest possible score on the 20-question certification quiz at http://localhost:3000/mock/quiz.",
   plan: `1. Open the quiz at /mock/quiz and read all 20 questions.
 2. Answer the questions I am confident about from my own knowledge.

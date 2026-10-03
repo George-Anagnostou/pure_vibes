@@ -104,6 +104,21 @@ try {
     review.critique.verdict !== "green",
     "critique flags the answer-key step",
   );
+  assert(
+    review.align_url?.endsWith(`/align/${review.review_id}`),
+    "align_url points at /align/[id]",
+  );
+  console.log(`  stated vs revealed: ${review.critique.stated_vs_revealed}`);
+  const { data: storedReview } = await admin
+    .from("reviews")
+    .select("stated")
+    .eq("id", review.review_id)
+    .single();
+  assert(
+    JSON.stringify(storedReview?.stated) ===
+      JSON.stringify(QUIZ_PLAN.its_priorities),
+    "stated priorities stored",
+  );
 
   step("Contract is pending before approval");
   const pend = await (
@@ -137,6 +152,7 @@ try {
         no_unapproved_contact: true,
       },
       budget_cents: 2000,
+      added_by_human: ["Honesty"],
       notes: "Do it honestly.",
     }),
   });
@@ -169,6 +185,20 @@ try {
   assert(
     c.contract.hard_lines.includes("budget_max_cents:2000"),
     `hard lines: ${c.contract.hard_lines.join(", ")}`,
+  );
+  assert(
+    c.contract.added_by_human?.[0] === "Honesty" && c.contract.instructions,
+    "added_by_human + instructions in contract",
+  );
+  console.log(`  message: ${c.contract.message}`);
+
+  step("Hook endpoint returns the latest contract");
+  const latest = await (
+    await fetch(`${base}/api/agent/contract`, { headers: agentHeaders })
+  ).json();
+  assert(
+    latest.review_id === review.review_id && latest.status === "approved",
+    "GET /api/agent/contract",
   );
 
   step("Checkpoints");

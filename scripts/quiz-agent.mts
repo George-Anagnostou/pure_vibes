@@ -32,7 +32,7 @@ for (const risk of review.critique?.hard_line_risks ?? []) {
   console.log(`  - [${risk.severity}] ${risk.hard_line}: ${risk.explanation}`);
 }
 
-console.log(`\nWaiting for the human to approve: ${review.approval_url}`);
+console.log(`\nWaiting for the human to approve: ${review.align_url}`);
 let contract;
 for (;;) {
   const lookup = await call(`/api/reviews/${review.review_id}/contract`);

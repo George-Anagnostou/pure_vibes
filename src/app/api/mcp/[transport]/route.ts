@@ -2,12 +2,20 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
-import { createReview, getContract, waitForContract, type ContractLookup } from "@/lib/glassbox/reviews";
+import {
+  createReview,
+  getContract,
+  waitForContract,
+  type ContractLookup,
+} from "@/lib/glassbox/reviews";
 import { requestSpend } from "@/lib/glassbox/spend";
 import { HttpError } from "@/lib/http";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// align runs Reveal + Critique (~10-25s) and then waits for the human, so give it room.
+export const maxDuration = 120;
+// Stop waiting this long after the request started, leaving margin under maxDuration.
+const ALIGN_WAIT_UNTIL_MS = 95_000;
 
 // Glass Box MCP server. Every tool is scoped to the user who owns the gb_ key.
 // mcp-handler ignores the path, so /api/mcp/mcp is the canonical endpoint.
@@ -17,52 +25,105 @@ type ToolCtx = { http?: { authInfo?: { extra?: Record<string, unknown> } } };
 
 function agentFrom(ctx: ToolCtx): AgentAuth {
   const extra = ctx.http?.authInfo?.extra;
-  if (typeof extra?.userId !== "string") throw new HttpError(401, "Missing Glass Box agent key.");
-  return { userId: extra.userId, agentName: typeof extra.agentName === "string" ? extra.agentName : "agent" };
+  if (typeof extra?.userId !== "string")
+    throw new HttpError(401, "Missing Glass Box agent key.");
+  return {
+    userId: extra.userId,
+    agentName: typeof extra.agentName === "string" ? extra.agentName : "agent",
+  };
 }
 
-const text = (data: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] });
+const text = (data: unknown) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+});
 
 function toolError(error: unknown) {
   let message = "Glass Box request failed. Try again.";
   if (error instanceof HttpError) message = error.message;
-  else console.error("glassbox_mcp_tool_failed", { type: error instanceof Error ? error.name : "Unknown" });
+  else
+    console.error("glassbox_mcp_tool_failed", {
+      type: error instanceof Error ? error.name : "Unknown",
+    });
   return { isError: true, content: [{ type: "text" as const, text: message }] };
 }
 
 function contractPayload(lookup: ContractLookup) {
-  if (lookup.status === "approved") return { status: "approved", contract: lookup.contract };
+  if (lookup.status === "approved")
+    return { status: "approved", contract: lookup.contract };
   if (lookup.status === "pending") {
-    return { status: "pending", approval_url: lookup.approval_url, next: "Ask the human to open approval_url, then call get_contract" };
+    return {
+      status: "pending",
+      align_url: lookup.align_url,
+      next: "Show the human align_url (open it for them if you can), wait for them to submit, then call get_contract.",
+    };
   }
-  return { status: lookup.status, approval_url: lookup.approval_url, next: "The human did not approve this plan. Do not execute it." };
+  return {
+    status: lookup.status,
+    align_url: lookup.align_url,
+    next: "The human did not approve this plan. Do not execute it.",
+  };
 }
 
-const reviewId = z.uuid().describe("review_id returned by review_plan");
+const reviewId = z.uuid().describe("review_id returned by align");
+
+const ALIGN_DESCRIPTION =
+  "Call this BEFORE executing any multi-step plan, and again whenever the plan changes materially. Send the task, your full plan, and YOUR OWN ranked priorities. Glass Box reveals what the plan actually optimizes for (from its steps, not your words), flags what you missed, and asks the human to re-rank priorities at align_url. Waits for the human to submit (up to ~1 min). When a contract comes back, it is binding: follow its ranked_priorities, plan_guidance and hard_lines, call `checkpoint` before each consequential action, and `request_spend` before spending money. If status is pending, show the human align_url, then call get_contract.";
 
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
-      "review_plan",
+      "align",
       {
-        title: "Review plan with Glass Box",
-        description:
-          "Call this BEFORE executing any multi-step plan. Glass Box reveals what the plan is really optimizing for, critiques it, and asks the human to rank priorities on their phone. Waits up to ~45s for approval. When a contract comes back, follow it: obey its ranked priorities and hard lines, call `checkpoint` before each consequential action, and `request_spend` before spending money. If status is pending, ask the human to open approval_url, then call get_contract.",
+        title: "Align plan with the human (Glass Box)",
+        description: ALIGN_DESCRIPTION,
         inputSchema: z.object({
-          task: z.string().trim().min(1).max(4000).describe("What the human asked you to do"),
-          plan: z.string().trim().min(1).max(12000).describe("Your full step-by-step plan"),
+          task: z
+            .string()
+            .trim()
+            .min(1)
+            .max(4000)
+            .describe("What the human asked you to do"),
+          plan: z
+            .string()
+            .trim()
+            .min(1)
+            .max(12000)
+            .describe("Your full step-by-step plan"),
+          its_priorities: z
+            .array(z.string().trim().min(1).max(100))
+            .max(12)
+            .describe(
+              "What YOU are optimizing for, highest first, e.g. ['Cost', 'Reliability', 'Speed']",
+            ),
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },
-      async ({ task, plan, agent_name }, ctx) => {
+      async ({ task, plan, its_priorities, agent_name }, ctx) => {
+        const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
-          const review = await createReview({ userId: agent.userId, agentName: agent_name ?? agent.agentName, task, plan });
-          const lookup = await waitForContract(review.review_id, agent.userId, 45_000);
+          const review = await createReview({
+            userId: agent.userId,
+            agentName: agent_name ?? agent.agentName,
+            task,
+            plan,
+            stated: its_priorities,
+          });
+          const lookup = await waitForContract(
+            review.review_id,
+            agent.userId,
+            started + ALIGN_WAIT_UNTIL_MS,
+          );
           return text({
             review_id: review.review_id,
-            approval_url: review.approval_url,
-            revealed: { headline: review.revealed.headline, priorities: review.revealed.priorities },
+            align_url: review.align_url,
+            stated_vs_revealed: review.critique.stated_vs_revealed,
+            revealed: {
+              headline: review.revealed.headline,
+              priorities: review.revealed.priorities,
+              ignored: review.revealed.ignored,
+            },
+            suggestions: review.critique.missing_priorities,
             critique: {
               verdict: review.critique.verdict,
               summary: review.critique.summary,
@@ -80,13 +141,17 @@ const handler = createMcpHandler(
       "get_contract",
       {
         title: "Get priority contract",
-        description: "Fetch the human-approved priority contract for a review. Follow it exactly once approved; if pending, wait and call again.",
+        description:
+          "Fetch the human-approved priority contract for a review. Follow it exactly once approved; if pending, wait and call again.",
         inputSchema: z.object({ review_id: reviewId }),
       },
       async ({ review_id }, ctx) => {
         try {
           const agent = agentFrom(ctx as ToolCtx);
-          return text({ review_id, ...contractPayload(await getContract(review_id, agent.userId)) });
+          return text({
+            review_id,
+            ...contractPayload(await getContract(review_id, agent.userId)),
+          });
         } catch (error) {
           return toolError(error);
         }
@@ -101,15 +166,34 @@ const handler = createMcpHandler(
           "Call before each consequential action (fetching a resource, contacting someone, submitting, provisioning, buying). Returns allow / warn / block. On block, do NOT perform the action. On warn, reconsider or ask the human.",
         inputSchema: z.object({
           review_id: reviewId,
-          action: z.string().trim().min(1).max(200).describe("Verb, e.g. fetch, email, provision, purchase"),
-          target: z.string().trim().min(1).max(1000).describe("URL, path, person, or resource"),
-          details: z.record(z.string(), z.unknown()).optional().describe("Why, and anything relevant (e.g. restricted: true)"),
+          action: z
+            .string()
+            .trim()
+            .min(1)
+            .max(200)
+            .describe("Verb, e.g. fetch, email, provision, purchase"),
+          target: z
+            .string()
+            .trim()
+            .min(1)
+            .max(1000)
+            .describe("URL, path, person, or resource"),
+          details: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe("Why, and anything relevant (e.g. restricted: true)"),
         }),
       },
       async ({ review_id, action, target, details }, ctx) => {
         try {
           const agent = agentFrom(ctx as ToolCtx);
-          return text(await runCheckpoint(review_id, agent.userId, { action, target, details }));
+          return text(
+            await runCheckpoint(review_id, agent.userId, {
+              action,
+              target,
+              details,
+            }),
+          );
         } catch (error) {
           return toolError(error);
         }
@@ -120,7 +204,8 @@ const handler = createMcpHandler(
       "request_spend",
       {
         title: "Request to spend money",
-        description: "Ask before spending money. Enforces the human's budget cap. Only proceed if allowed is true.",
+        description:
+          "Ask before spending money. Enforces the human's budget cap. Only proceed if allowed is true.",
         inputSchema: z.object({
           review_id: reviewId,
           amount_cents: z.number().int().positive().max(10_000_000),
@@ -130,14 +215,45 @@ const handler = createMcpHandler(
       async ({ review_id, amount_cents, purpose }, ctx) => {
         try {
           const agent = agentFrom(ctx as ToolCtx);
-          return text(await requestSpend(review_id, agent.userId, amount_cents, purpose));
+          return text(
+            await requestSpend(review_id, agent.userId, amount_cents, purpose),
+          );
         } catch (error) {
           return toolError(error);
         }
       },
     );
+
+    // Shown in Claude Code as /glassbox:align — the human asks the agent to realign on demand.
+    server.registerPrompt(
+      "align",
+      {
+        title: "Realign with Glass Box",
+        description:
+          "Ask the agent to send its current plan and priorities to Glass Box so you can re-rank them.",
+        argsSchema: z.object({
+          focus: z
+            .string()
+            .optional()
+            .describe(
+              "Optional: what you want the agent to reconsider (e.g. cost, security)",
+            ),
+        }),
+      },
+      ({ focus }) => ({
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Pause and realign with me using Glass Box. Write out your current task, your full remaining plan step by step, and your own ranked priorities, then call the glassbox \`align\` tool with them. Show me the align_url so I can re-rank. When the contract comes back, replan to match it and tell me what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+            },
+          },
+        ],
+      }),
+    );
   },
-  { serverInfo: { name: "glass-box", version: "0.1.0" } },
+  { serverInfo: { name: "glass-box", version: "0.2.0" } },
 );
 
 const authed = withMcpAuth(
@@ -146,7 +262,12 @@ const authed = withMcpAuth(
     if (!bearerToken?.startsWith("gb_")) return undefined;
     try {
       const { userId, agentName, agentKeyId } = await requireAgent(req);
-      return { token: bearerToken, clientId: agentKeyId, scopes: [], extra: { userId, agentName } };
+      return {
+        token: bearerToken,
+        clientId: agentKeyId,
+        scopes: [],
+        extra: { userId, agentName },
+      };
     } catch (error) {
       if (error instanceof HttpError) return undefined;
       throw error;
