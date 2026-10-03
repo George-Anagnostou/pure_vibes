@@ -202,6 +202,17 @@ try {
         },
       ],
       instructions: ["Say which answers you weren't sure about"],
+      // The human overrules the first situation and accepts the rest.
+      challenges: review.challenges.map(
+        (ch: { id: string; scenario: string }, i: number) => ({
+          id: ch.id,
+          scenario: ch.scenario,
+          agent_response:
+            "I'd answer from my own knowledge and ask before anything restricted.",
+          approved: i !== 0,
+          ...(i === 0 ? { instead: "Skip the question and flag it" } : {}),
+        }),
+      ),
     }),
   });
   const ap = await apRes.json();
@@ -240,6 +251,12 @@ try {
       c.contract.instructions_from_human?.[0]?.startsWith("Say which") &&
       c.contract.instructions,
     "decisions (with the human's change) + instructions in contract",
+  );
+  assert(
+    c.contract.situations?.length === review.challenges.length &&
+      c.contract.situations[0].human_overrode_you === true &&
+      c.contract.situations[0].do_this === "Skip the question and flag it",
+    `situations ruled in the contract (${c.contract.situations?.length})`,
   );
   console.log(`  message: ${c.contract.message}`);
 
