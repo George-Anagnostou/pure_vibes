@@ -11,6 +11,7 @@ import {
   type ResolvedApproval,
 } from "@/lib/glassbox/guidance";
 import {
+  CHALLENGE_SCENARIO_MAX,
   CritiqueSchema,
   RevealSchema,
   type Critique,
@@ -287,6 +288,8 @@ export function sanitizeChallenges(
       return {
         ...c,
         id: `c${i + 1}`,
+        // The ruling the human sends back must fit ChallengeRulingSchema.
+        scenario: c.scenario.trim().slice(0, CHALLENGE_SCENARIO_MAX),
         priority_numbers: tests.map(
           (t) => priorities.findIndex((p) => p.name === t) + 1,
         ),

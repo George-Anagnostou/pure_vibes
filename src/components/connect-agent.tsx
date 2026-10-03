@@ -90,6 +90,8 @@ export function clientSetups(origin: string, key: string) {
       steps: [
         {
           hint: "Settings → Developer → Edit Config. Add this to claude_desktop_config.json (needs Node.js):",
+          // Claude Desktop splits args on spaces (mcp-remote README), so the
+          // header value goes through env, which it does not split.
           code: JSON.stringify(
             {
               mcpServers: {
@@ -100,8 +102,9 @@ export function clientSetups(origin: string, key: string) {
                     "mcp-remote",
                     mcpUrl,
                     "--header",
-                    `Authorization: Bearer ${key}`,
+                    "Authorization:${AUTH_HEADER}",
                   ],
+                  env: { AUTH_HEADER: `Bearer ${key}` },
                 },
               },
             },

@@ -31,6 +31,22 @@ describe("sanitizeChallenges", () => {
     expect(c.tests).toEqual(["Accuracy", "Low cost"]);
   });
 
+  it("clamps the scenario so the human's ruling always validates", async () => {
+    const { ChallengeRulingSchema } = await import("@/lib/glassbox/types");
+    const [c] = sanitizeChallenges(
+      [challenge([1, 2], [], "x".repeat(5000))],
+      priorities,
+    );
+    expect(
+      ChallengeRulingSchema.safeParse({
+        id: c.id,
+        scenario: c.scenario,
+        agent_response: "",
+        approved: true,
+      }).success,
+    ).toBe(true);
+  });
+
   it("numbers challenges c1..cN and drops empty scenarios", () => {
     const out = sanitizeChallenges(
       [
