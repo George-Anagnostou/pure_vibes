@@ -208,27 +208,119 @@ function MintForm({
   );
 }
 
+type InstallState =
+  | { kind: "idle" }
+  | { kind: "busy" }
+  | { kind: "error"; message: string }
+  | { kind: "done"; command: string; prompt: string; minutes: number };
+
+// The easy path: one button, one short line to paste. The code inside it works once
+// for 15 minutes and mints a fresh agent key when it runs, so nobody copies a key.
+export function InstallCommand({ onIssued }: { onIssued?: () => void }) {
+  const [state, setState] = useState<InstallState>({ kind: "idle" });
+  async function issue() {
+    setState({ kind: "busy" });
+    try {
+      const res = await fetch("/api/install-codes", { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        command?: string;
+        claude_prompt?: string;
+        expires_at?: string;
+        error?: string;
+      };
+      if (!res.ok || !body.command)
+        throw new Error(
+          res.status === 401
+            ? "Your session expired. Sign in again."
+            : (body.error ?? "Could not create an install command."),
+        );
+      setState({
+        kind: "done",
+        command: body.command,
+        prompt: body.claude_prompt ?? body.command,
+        minutes: body.expires_at
+          ? Math.max(
+              1,
+              Math.round((Date.parse(body.expires_at) - Date.now()) / 60_000),
+            )
+          : 15,
+      });
+      onIssued?.();
+    } catch (cause) {
+      setState({
+        kind: "error",
+        message:
+          cause instanceof Error ? cause.message : "Something went wrong.",
+      });
+    }
+  }
+  if (state.kind !== "done")
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={issue}
+          disabled={state.kind === "busy"}
+          className="min-h-12 w-full rounded-xl bg-ink px-5 text-base font-bold text-white hover:bg-ink/85 disabled:opacity-60"
+        >
+          {state.kind === "busy"
+            ? "Getting your command…"
+            : "Get my install command"}
+        </button>
+        {state.kind === "error" && (
+          <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+            {state.message}
+          </p>
+        )}
+      </div>
+    );
+  const { minutes } = state;
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-bold">Paste into your terminal</h3>
+        <p className="mb-2 text-sm text-ink-soft">
+          Run it inside the project folder you use with Claude Code.
+        </p>
+        <CopyBlock code={state.command} />
+      </div>
+      <div>
+        <h3 className="font-bold">…or paste into Claude Code</h3>
+        <p className="mb-2 text-sm text-ink-soft">It runs the line for you.</p>
+        <CopyBlock code={state.prompt} />
+      </div>
+      <p className="text-sm text-ink-soft">
+        Works once, for the next {minutes} minutes.{" "}
+        <button
+          type="button"
+          onClick={issue}
+          className="font-semibold underline"
+        >
+          Get a new one
+        </button>
+      </p>
+      <p className="rounded-xl bg-paper p-3 text-sm">
+        <span className="font-bold">Then:</span> restart Claude Code in that
+        folder, approve “glassbox” if it asks, and type <code>/mcp</code> to
+        check it&apos;s connected.
+      </p>
+    </div>
+  );
+}
+
 // Compact version for the inbox: mint a key, get the Claude Code command.
 export function ConnectAgent() {
-  const { state, mint } = useMint();
   return (
     <div>
-      <p className="text-sm text-ink-soft">
-        Mint a key, then paste the block into your agent. The key is shown once.
-        Cursor, other MCP clients and the REST API are on{" "}
+      <p className="mb-3 text-sm text-ink-soft">
+        One short command connects Claude Code. Cursor, other MCP clients and
+        the REST API are on{" "}
         <Link href="/connect" className="font-semibold underline">
           Connect
         </Link>
         .
       </p>
-      <div className="mt-3">
-        <MintForm state={state} onMint={mint} />
-      </div>
-      {state.kind === "done" && (
-        <div className="mt-3">
-          <CopyBlock code={agentPrompt(window.location.origin, state.key)} />
-        </div>
-      )}
+      <InstallCommand />
     </div>
   );
 }
@@ -245,74 +337,96 @@ export function AgentSetup({
   const key = state.kind === "done" ? state.key : KEY_PLACEHOLDER;
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">1. Mint an agent key</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          One key per agent or machine. Name it so you can recognize and revoke
-          it later.
+      <section className="rounded-2xl border-2 border-ink bg-card p-5">
+        <h2 className="text-lg font-black">1. Connect Claude Code</h2>
+        <p className="mt-1 mb-4 text-sm text-ink-soft">
+          Click the button, then paste one line. No keys to copy.
         </p>
-        <div className="mt-3">
-          <MintForm state={state} onMint={mint} />
-        </div>
-        {state.kind === "done" && (
-          <div
-            role="status"
-            className="mt-3 rounded-xl bg-warn-bg p-3 text-sm text-warn"
-          >
-            <p className="font-bold">
-              Copy “{state.name}” now: this is the only time it is shown.
-            </p>
-            <div className="mt-2">
-              <CopyBlock code={state.key} />
-            </div>
-            <p className="mt-2">
-              Anyone with this key can ask you for approvals as your agent. Keep
-              it out of git; revoke it below if it leaks.
-            </p>
-          </div>
-        )}
+        <InstallCommand onIssued={onMinted} />
       </section>
 
       <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">2. Connect your agent</h2>
+        <h2 className="text-lg font-black">2. Give it a task</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          MCP endpoint{" "}
-          <code className="rounded bg-paper px-1 font-mono text-xs">
-            {origin}/api/mcp/mcp
-          </code>
-          {state.kind !== "done" && (
-            <>
-              {" "}
-              · snippets show{" "}
-              <code className="font-mono text-xs">{KEY_PLACEHOLDER}</code> until
-              you mint a key
-            </>
-          )}
-        </p>
-        <div className="mt-4 space-y-5">
-          {setupSnippets(origin, key).map((s) => (
-            <div key={s.id}>
-              <h3 className="font-bold">{s.title}</h3>
-              <p className="mb-2 text-sm text-ink-soft">{s.hint}</p>
-              <CopyBlock code={s.code} />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">3. Give it a task</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Before acting, your agent calls <code>align</code> with its approach.
-          You get a pop-up (or a link in your{" "}
+          Ask Claude Code for anything, e.g. “book me dinner in San Francisco”.
+          Before acting it checks in with Glass Box and a window opens (or a
+          link in your{" "}
           <Link href="/inbox" className="font-semibold underline">
             inbox
           </Link>
-          ) to correct the decisions it is making for you, and it follows what
-          you approve. In Claude Code you can also type{" "}
-          <code>/mcp__glassbox__align</code> to make it realign.
+          ) where you rank what matters and correct how it would handle real
+          situations. It follows what you send. Type{" "}
+          <code>/mcp__glassbox__align</code> to make it check in again.
         </p>
       </section>
+
+      <details className="rounded-2xl border border-line bg-card p-5">
+        <summary className="cursor-pointer text-lg font-black">
+          Other ways to connect
+        </summary>
+        <p className="mt-1 text-sm text-ink-soft">
+          Cursor, any MCP client, the REST API, or setting things up by hand
+          with an agent key.
+        </p>
+        <div className="mt-4 space-y-6">
+          <section className="rounded-2xl border border-line bg-card p-5">
+            <h2 className="text-lg font-black">Mint an agent key</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              One key per agent or machine. Name it so you can recognize and
+              revoke it later.
+            </p>
+            <div className="mt-3">
+              <MintForm state={state} onMint={mint} />
+            </div>
+            {state.kind === "done" && (
+              <div
+                role="status"
+                className="mt-3 rounded-xl bg-warn-bg p-3 text-sm text-warn"
+              >
+                <p className="font-bold">
+                  Copy “{state.name}” now: this is the only time it is shown.
+                </p>
+                <div className="mt-2">
+                  <CopyBlock code={state.key} />
+                </div>
+                <p className="mt-2">
+                  Anyone with this key can ask you for approvals as your agent.
+                  Keep it out of git; revoke it below if it leaks.
+                </p>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-line bg-card p-5">
+            <h2 className="text-lg font-black">Connect with a key</h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              MCP endpoint{" "}
+              <code className="rounded bg-paper px-1 font-mono text-xs">
+                {origin}/api/mcp/mcp
+              </code>
+              {state.kind !== "done" && (
+                <>
+                  {" "}
+                  · snippets show{" "}
+                  <code className="font-mono text-xs">
+                    {KEY_PLACEHOLDER}
+                  </code>{" "}
+                  until you mint a key
+                </>
+              )}
+            </p>
+            <div className="mt-4 space-y-5">
+              {setupSnippets(origin, key).map((s) => (
+                <div key={s.id}>
+                  <h3 className="font-bold">{s.title}</h3>
+                  <p className="mb-2 text-sm text-ink-soft">{s.hint}</p>
+                  <CopyBlock code={s.code} />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </details>
     </div>
   );
 }

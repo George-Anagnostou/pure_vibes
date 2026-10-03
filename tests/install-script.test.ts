@@ -43,3 +43,14 @@ describe("/install script", () => {
     }
   });
 });
+
+describe("personal installer (from /i/<code>)", () => {
+  it("embeds a gb_ key so the script needs no input", () => {
+    const out = script("https://example.com", "gb_abcdefghijklmnopqrstuv");
+    expect(out).toContain("GLASSBOX_AGENT_KEY:-gb_abcdefghijklmnopqrstuv");
+  });
+  it("refuses anything that isn't a plain gb_ key", () => {
+    expect(() => script("https://example.com", "gb_x'; rm -rf / #")).toThrow();
+    expect(() => script("https://example.com", "sk_live_abc")).toThrow();
+  });
+});

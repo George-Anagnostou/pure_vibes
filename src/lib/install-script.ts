@@ -1,14 +1,18 @@
 // The /install shell script. Kept out of the route file (routes may only export handlers).
-export function script(origin: string): string {
-  // The origin is pasted into shell code: accept only a bare http(s) origin.
+// With `key`, the script is a one-time personal installer (served from /i/<code>)
+// and needs no input; without it, it asks for a key.
+export function script(origin: string, key?: string): string {
+  // Both are pasted into shell code: accept only a bare http(s) origin and a gb_ key.
   if (!/^https?:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(origin))
     throw new Error("install script: unexpected origin");
+  if (key !== undefined && !/^gb_[A-Za-z0-9_-]{16,128}$/.test(key))
+    throw new Error("install script: unexpected key");
   const o = origin;
   return `#!/bin/sh
 # Glass Box one-line setup: connects this project's Claude Code to ${o}
 set -eu
 URL='${o}'
-KEY="\${1:-\${GLASSBOX_AGENT_KEY:-}}"
+KEY="\${1:-\${GLASSBOX_AGENT_KEY:-${key ?? ""}}}"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "Glass Box needs Node.js 18 or newer: https://nodejs.org" >&2
