@@ -103,14 +103,22 @@ settings.hooks = {
 };
 writeJson(settingsPath, settings);
 
-// 3. CLAUDE.md
+// 3. CLAUDE.md: add the Glass Box section, or replace an older copy of it in place
 const mdPath = join(dir, "CLAUDE.md");
 const md = existsSync(mdPath) ? readFileSync(mdPath, "utf8") : "";
-if (!md.includes("<!-- glassbox -->")) {
+const section = readFileSync(join(kit, "CLAUDE.glassbox.md"), "utf8");
+const start = md.indexOf("<!-- glassbox -->");
+if (start === -1) {
   writeFileSync(
     mdPath,
-    `${md}${md && !md.endsWith("\n") ? "\n" : ""}${md ? "\n" : ""}${readFileSync(join(kit, "CLAUDE.glassbox.md"), "utf8")}`,
+    `${md}${md && !md.endsWith("\n") ? "\n" : ""}${md ? "\n" : ""}${section}`,
   );
+} else {
+  const endTag = "<!-- /glassbox -->";
+  const end = md.indexOf(endTag, start);
+  const after =
+    end === -1 ? "" : md.slice(end + endTag.length).replace(/^\n/, "");
+  writeFileSync(mdPath, `${md.slice(0, start)}${section}${after}`);
 }
 
 // 4. Keep the key out of git
