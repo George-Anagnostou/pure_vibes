@@ -27,6 +27,7 @@
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.71",
     "@ai-sdk/openai": "^4.0.83",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
@@ -46,6 +47,7 @@
     "eslint-config-next": "^16.3.8",
     "prettier": "^3.9.9",
     "supabase": "^2.119.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3"
   }
