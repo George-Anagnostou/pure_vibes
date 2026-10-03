@@ -36,19 +36,37 @@ Separate payload, rate, concurrency, and model-call limits still apply.
 - Reused portal: `bpc_1UMZTiLWN3X7l2uWWnAYDQkW`. Payment-method updates,
   invoice history, and cancellation at period end are enabled. Subscription
   updates are disabled. The portal headline now uses Glass Box.
-- All created Stripe objects have `livemode=false`. No customers or subscriptions
-  were created by this task, and the previous inactive plan remains unchanged.
-- **Configuration blocker:** Vercel's inspected `STRIPE_SECRET_KEY` and
-  `STRIPE_MCP_KEY` authenticate to a different test account,
-  `acct_1UMYkzGzm67ldhmK` (`stripe-sandbox-cerulean-ferry`). Do not combine those
-  credentials with the price above. The user must select the intended account;
-  a persistent key from that account must be used. A short-lived CLI login is
-  not a deployment credential.
-- No webhook endpoint currently exists in the CLI's Glass Box sandbox. Create
-  one after the account mismatch is resolved. Vercel price/key/webhook variables
-  have not been changed by this task, and no deployment was triggered.
+- All created Stripe objects have `livemode=false`; the previous inactive plan
+  remains unchanged. A disposable trial subscription was created for verification,
+  then canceled, and its test customer was deleted. No money was charged.
+- **Production configuration verified:** George rotated `STRIPE_SECRET_KEY` and
+  stored it as a sensitive Production variable. The deployed app successfully
+  retrieved a subscription belonging to Glass Box using that key. The price above
+  is now set in Vercel `STRIPE_PRICE_ID`.
+- Enabled webhook `we_1UMbWmLWN3X7l2uWwnggfMmP` targets
+  `https://pure-vibes-smoky.vercel.app/api/stripe/webhook`, with
+  `customer.subscription.created`, `.updated`, and `.deleted`, pinned to API
+  version `2026-09-30.endive`. Its signing secret is stored as sensitive Production
+  `STRIPE_WEBHOOK_SECRET`.
+- Verified deployment `dpl_4DuKQo7xx43VMp76dTmT5DR8GEHU` is READY, based on
+  canonical commit `eaa6cad40b4dd9b3f2349bfe1fd0612f101c6f41`. Health returned
+  200, unauthenticated billing returned 401, and unsigned webhooks returned 400.
+  A signed subscription probe returned 200 after retrieving the Glass Box
+  subscription and calling Supabase `sync_subscription`. Stripe's actual created
+  event `evt_1UMbXhLWN3X7l2uWJ4qOg4zt` reached zero pending webhook deliveries.
+  The test customer was intentionally not mapped to an app user, so this verifies
+  connectivity and signature handling, **not** subscription-row persistence or
+  signed-in Checkout end to end.
+- Preview and Development currently lack `STRIPE_SECRET_KEY`; George must add
+  appropriate sandbox credentials there before billing can work in those scopes.
+  The hosted webhook secret applies only to Production; local Stripe CLI listeners
+  require their own signing secrets.
+- Legacy `STRIPE_MCP_KEY` and publishable-key variables remain unchanged. The MCP
+  key previously authenticated to `acct_1UMYkzGzm67ldhmK`, a different sandbox;
+  do not use it for Glass Box. Current application source does not reference these
+  variables. Align or retire them before introducing any dependency on them.
 
-This branch adds `GET /api/billing/plan` (signed-in user, private/no-store) returning
+The app provides `GET /api/billing/plan` (signed-in user, private/no-store) returning
 `plan: {priceId, name, currency, unitAmount, interval, includedCheckpoints,
 overagePolicy, version}` from the server-configured Stripe price. Amounts use
 Stripe's minor currency units. Checkout validates that price is active, monthly,
@@ -90,10 +108,12 @@ An MCP server cannot force every host to open a browser or resume an agent turn;
 verify the target client's actual behavior. Start with real Claude Code and Codex
 connection tests. Grok web and Gemini web compatibility is not yet verified.
 
-Nick's draft PR #5 currently supports manually issued `gb_` agent keys and a
+Nick's merged PR #5 supports manually issued `gb_` agent keys and a
 `/connect` page. That is a fallback, not automatic OAuth onboarding. Prefer bearer
 headers; do not put long-lived keys in query strings. Keep key migration/revocation
-explicit while OAuth is added. PR #4 is now merged; coordinate with the remaining #5 onboarding work.
+explicit while OAuth is added. PRs #4, #5, #7, and #8 are merged. The current UI
+does not mount the developer console's Checkout/Manage billing controls; Kathryn
+still needs to expose billing and usage in the account experience.
 
 ## Supabase authentication requirements
 
@@ -201,17 +221,13 @@ Keep a reconciliation path for missed/out-of-order webhooks.
 
 ## Remaining sandbox rollout
 
-1. Resolve the Stripe account mismatch. Put a persistent sandbox API key into
-   Vercel `STRIPE_SECRET_KEY`; align tool credentials and publishable keys too.
-   If the Vercel sandbox is chosen instead, create/reuse its own product/price
-   and update this inventory. Never reuse IDs across accounts.
-2. Create the hosted `/api/stripe/webhook` destination in that account, subscribed
-   to `customer.subscription.created`, `.updated`, and `.deleted`. Use the pinned
-   SDK's API version (`2026-09-30.endive` at this review). Store its signing secret
-   as Vercel Production `STRIPE_WEBHOOK_SECRET`, and its price ID as
-   `STRIPE_PRICE_ID`. Local CLI listeners have their own secrets.
-3. Deploy after matching configuration is saved and the PR checks pass. A Vercel
-   Production deployment can use Stripe sandbox credentials; it is not live money.
+1. Production key/price/webhook configuration and deployment are complete as
+   recorded above. Configure Preview/Development keys and align or retire unused
+   legacy Stripe variables separately. Never reuse IDs across accounts.
+2. Preserve the hosted webhook destination and signing-secret pairing. Local CLI
+   listeners use their own secrets. Redeploy after hosted configuration changes.
+3. Continue using sandbox credentials during acceptance testing. The Vercel
+   Production deployment is currently connected to Stripe sandbox, not live money.
 4. Nick implements/tests the usage schema and hooks new review creation. George
    extends webhook persistence for billing period/plan snapshots. Kathryn binds
    the plan and usage endpoints into account UI. Do not enable a paid allowance
