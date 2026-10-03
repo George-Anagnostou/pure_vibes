@@ -6,8 +6,10 @@
 //
 // Options:
 //   --query       send the key as ?key=gb_... instead of the Authorization header
-//   --align       also call `align` with a tiny 2-step plan (one LLM call; creates a
-//                 pending review) and check its align_url uses the same origin as --url
+//   --align FILE  also call `align` with the JSON arguments in FILE (one LLM call;
+//                 creates a pending review) and check its align_url uses the same
+//                 origin as --url. The schema lives with the server, so pass args
+//                 that match the deployed `align` tool (see tools/list output).
 //   --throwaway   create a temporary user + agent key with the Supabase admin client
 //                 (needs NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SECRET_KEY, e.g.
 //                 `node --env-file=.env.local ...`), run the checks, then delete the user
@@ -257,35 +259,14 @@ try {
       missing,
     );
 
-    if (has("--align")) {
+    const alignArgsPath = flag("--align");
+    if (alignArgsPath) {
       console.log("\n== align (creates a pending review; one LLM call)");
+      const { readFileSync } = await import("node:fs");
       const t1 = Date.now();
       const aligned = await rpc("tools/call", {
         name: "align",
-        arguments: {
-          task: "MCP connectivity check: summarize a README",
-          agent_name: "mcp-client-check",
-          steps: [
-            {
-              name: "Read the README",
-              how: "Read README.md from the repo",
-              uses: ["Read"],
-              est_tokens: 2000,
-              est_cost_usd: 0.01,
-              why: "Need the content",
-              source: "request",
-            },
-            {
-              name: "Write a 3-line summary",
-              how: "Summarize in plain text",
-              uses: [],
-              est_tokens: 500,
-              est_cost_usd: 0.005,
-              why: "Asked for a summary",
-              source: "request",
-            },
-          ],
-        },
+        arguments: JSON.parse(readFileSync(alignArgsPath, "utf8")),
       });
       const alignedText = toolText(aligned);
       let parsed: { align_url?: string; review_id?: string } = {};
