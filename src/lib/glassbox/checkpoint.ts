@@ -140,7 +140,7 @@ const EVENT_TYPE = { allow: "checkpoint_ok", warn: "drift", block: "breach" } as
 export async function runCheckpoint(reviewId: string, userId: string, input: CheckpointInput): Promise<CheckpointDecision> {
   const lookup = await getContract(reviewId, userId);
   if (lookup.status !== "approved") {
-    return { decision: "block", reason: "No approved contract — call review_plan first" };
+    return { decision: "block", reason: "No approved contract — call align first" };
   }
   const result = evaluateCheckpoint(input, lookup.contract);
   await logEvent({

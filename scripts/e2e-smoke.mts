@@ -3,6 +3,7 @@
 //   npx tsx --env-file=.env.local scripts/e2e-smoke.mts
 // Creates a throwaway user + agent key, runs the Beat 2 flow
 // (agent key -> review -> approve -> contract -> checkpoint), checks the events log, then deletes the user.
+import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
@@ -200,6 +201,85 @@ try {
     latest.review_id === review.review_id && latest.status === "approved",
     "GET /api/agent/contract",
   );
+
+  step("MCP server lists align tool and prompt");
+  const rpc = async (method: string, id: number) => {
+    const res = await fetch(`${base}/api/mcp/mcp`, {
+      method: "POST",
+      headers: {
+        ...agentHeaders,
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params: {} }),
+    });
+    const raw = await res.text();
+    const data = raw.includes("data:")
+      ? raw
+          .split("\n")
+          .find((l) => l.startsWith("data:"))!
+          .slice(5)
+      : raw;
+    return JSON.parse(data).result;
+  };
+  const tools = ((await rpc("tools/list", 1))?.tools ?? []).map(
+    (t: { name: string }) => t.name,
+  );
+  assert(
+    ["align", "get_contract", "checkpoint", "request_spend"].every((n) =>
+      tools.includes(n),
+    ),
+    `tools: ${tools.join(", ")}`,
+  );
+  const prompts = ((await rpc("prompts/list", 2))?.prompts ?? []).map(
+    (p: { name: string }) => p.name,
+  );
+  assert(prompts.includes("align"), `prompts: ${prompts.join(", ")}`);
+
+  step("Claude Code hooks (agent-kit)");
+  const runHook = (file: string, payload: object) => {
+    const r = spawnSync("node", [`agent-kit/hooks/${file}`], {
+      input: JSON.stringify(payload),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GLASSBOX_URL: base,
+        GLASSBOX_AGENT_KEY: keyBody.key,
+      },
+    });
+    return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null;
+  };
+  const ctx = runHook("glassbox-context.mjs", {
+    hook_event_name: "UserPromptSubmit",
+    prompt: "continue",
+  });
+  assert(
+    ctx?.additionalContext?.includes("BINDING"),
+    "context hook injects the contract",
+  );
+  const denied = runHook("glassbox-guard.mjs", {
+    hook_event_name: "PreToolUse",
+    tool_name: "WebFetch",
+    tool_input: { url: `${base}/mock/answer-key`, prompt: "get the answers" },
+  });
+  assert(
+    denied?.permissionDecision === "deny",
+    `guard denies answer-key WebFetch: ${denied?.permissionDecisionReason}`,
+  );
+  const curlDenied = runHook("glassbox-guard.mjs", {
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command: `curl -s ${base}/mock/answer-key` },
+  });
+  assert(
+    curlDenied?.permissionDecision === "deny",
+    "guard denies curl to the answer key",
+  );
+  const local = runHook("glassbox-guard.mjs", {
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command: "ls -la" },
+  });
+  assert(local === null, "guard ignores routine local commands");
 
   step("Checkpoints");
   const cp = async (body: object) =>
