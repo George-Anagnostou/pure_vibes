@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { appUrl } from "@/lib/env";
+import Stripe from "stripe";
+import { appUrl, ConfigurationError } from "@/lib/env";
 
 export class HttpError extends Error {
   constructor(
@@ -66,7 +67,22 @@ export function errorResponse(error: unknown) {
   const requestId = crypto.randomUUID();
   console.error("request_failed", {
     requestId,
-    type: error instanceof Error ? error.name : "UnknownError",
+    type:
+      error instanceof Stripe.errors.StripeError
+        ? error.type
+        : error instanceof Error
+          ? error.name
+          : "UnknownError",
+    ...(error instanceof ConfigurationError
+      ? { variable: error.variable }
+      : {}),
+    ...(error instanceof Stripe.errors.StripeError
+      ? {
+          providerCode: error.code,
+          providerRequestId: error.requestId,
+          status: error.statusCode,
+        }
+      : {}),
   });
   return json(
     {
