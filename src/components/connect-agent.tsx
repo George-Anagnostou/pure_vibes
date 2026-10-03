@@ -49,10 +49,10 @@ export function claudeCodeCommand(origin: string, key: string) {
   return `claude mcp add --transport http glassbox ${origin}/api/mcp/mcp --header "Authorization: Bearer ${key}"`;
 }
 
-// The standard way each app adds a remote MCP server, with the key filled in.
-// Claude Code: `claude mcp add` at user scope, so it works in every project.
-// Codex: `codex mcp add --url`, key read from an env var (Codex's supported way to
-// send a bearer token).
+// The standard, documented way each app adds a remote MCP server, key filled in.
+// Claude Code: `claude mcp add` at user scope (every project). Codex: `codex mcp add
+// --url`, bearer token from an env var. Claude Desktop: mcp-remote (its custom
+// connectors only take OAuth).
 export function clientSetups(origin: string, key: string) {
   const mcpUrl = `${origin}/api/mcp/mcp`;
   return [
@@ -61,19 +61,19 @@ export function clientSetups(origin: string, key: string) {
       label: "Claude Code",
       steps: [
         {
-          hint: "Paste into your terminal. It adds Glass Box for every project.",
+          hint: "Paste into your terminal. Glass Box is added for every project.",
           code: `claude mcp add --transport http --scope user glassbox ${mcpUrl} --header "Authorization: Bearer ${key}"`,
         },
       ],
       after:
-        "Start Claude Code (or restart it) and type /mcp: glassbox should say connected.",
+        "Start Claude Code (or restart it) and type /mcp. glassbox should say connected.",
     },
     {
       id: "codex",
       label: "Codex",
       steps: [
         {
-          hint: "1. Save your key so Codex can send it (adds it to your shell profile):",
+          hint: "1. Save your key so Codex can send it:",
           code: `echo 'export GLASSBOX_API_KEY=${key}' >> ~/.zshrc && export GLASSBOX_API_KEY=${key}`,
         },
         {
@@ -82,14 +82,14 @@ export function clientSetups(origin: string, key: string) {
         },
       ],
       after:
-        "Start Codex in a new terminal and run /mcp: glassbox should be listed. Using bash? Swap ~/.zshrc for ~/.bashrc.",
+        "Open Codex in a new terminal and run /mcp. glassbox should be listed. On bash, use ~/.bashrc.",
     },
     {
       id: "claude-desktop",
       label: "Claude Desktop",
       steps: [
         {
-          hint: "Claude Desktop → Settings → Developer → Edit Config, and add this to claude_desktop_config.json (needs Node.js):",
+          hint: "Settings → Developer → Edit Config. Add this to claude_desktop_config.json (needs Node.js):",
           code: JSON.stringify(
             {
               mcpServers: {
@@ -111,14 +111,14 @@ export function clientSetups(origin: string, key: string) {
         },
       ],
       after:
-        "Quit and reopen Claude Desktop; Glass Box appears under the tools (hammer) icon.",
+        "Quit and reopen Claude Desktop. Glass Box shows under the tools icon.",
     },
     {
       id: "other",
       label: "Cursor & others",
       steps: [
         {
-          hint: "Cursor: add this to .cursor/mcp.json (or Settings → MCP → Add). Most MCP clients take the same JSON.",
+          hint: "Cursor: .cursor/mcp.json (or Settings → MCP). Most MCP clients take the same JSON.",
           code: JSON.stringify(
             {
               mcpServers: {
@@ -133,11 +133,11 @@ export function clientSetups(origin: string, key: string) {
           ),
         },
         {
-          hint: "Client can only take a URL? Use this (the key is in the URL, so keep it private):",
+          hint: "Only takes a URL? Use this one. The key is in it, so keep it private.",
           code: `${mcpUrl}?key=${key}`,
         },
       ],
-      after: "Restart the client so it picks up the new server.",
+      after: "Restart the client so it picks up Glass Box.",
     },
   ];
 }
@@ -239,10 +239,8 @@ export function setupSnippets(origin: string, key: string) {
 export function CopyBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="relative">
-      <pre className="overflow-x-auto rounded-xl bg-ink p-3 pr-20 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all text-white">
-        {code}
-      </pre>
+    <div className={styles.codeWrap}>
+      <pre className={styles.codeBlock}>{code}</pre>
       <button
         type="button"
         onClick={async () => {
@@ -254,7 +252,7 @@ export function CopyBlock({ code }: { code: string }) {
             setCopied(false);
           }
         }}
-        className="absolute top-2 right-2 rounded-md bg-white/15 px-2 py-1 text-xs font-bold text-white hover:bg-white/25"
+        className={styles.copyBtn}
       >
         {copied ? "Copied" : "Copy"}
       </button>
@@ -352,14 +350,15 @@ export function InstallCommand({ onIssued }: { onIssued?: () => void }) {
           type="button"
           onClick={issue}
           disabled={state.kind === "busy"}
-          className="min-h-12 w-full rounded-xl bg-ink px-5 text-base font-bold text-white hover:bg-ink/85 disabled:opacity-60"
+          className={styles.btnDark}
+          style={{ width: "100%" }}
         >
           {state.kind === "busy"
             ? "Getting your command…"
             : "Get my install command"}
         </button>
         {state.kind === "error" && (
-          <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+          <p role="alert" className={styles.alertCard} style={{ marginTop: 8 }}>
             {state.message}
           </p>
         )}
@@ -367,33 +366,26 @@ export function InstallCommand({ onIssued }: { onIssued?: () => void }) {
     );
   const { minutes } = state;
   return (
-    <div className="space-y-4">
+    <div style={{ display: "grid", gap: 14 }}>
       <div>
-        <h3 className="font-bold">Paste into your terminal</h3>
-        <p className="mb-2 text-sm text-ink-soft">
-          Run it inside the project folder you use with Claude Code.
+        <p className={styles.stepNote}>
+          Paste into your terminal, inside your project folder:
         </p>
         <CopyBlock code={state.command} />
       </div>
       <div>
-        <h3 className="font-bold">…or paste into Claude Code</h3>
-        <p className="mb-2 text-sm text-ink-soft">It runs the line for you.</p>
+        <p className={styles.stepNote}>…or paste into Claude Code:</p>
         <CopyBlock code={state.prompt} />
       </div>
-      <p className="text-sm text-ink-soft">
+      <p className={styles.smallBody} style={{ margin: 0 }}>
         Works once, for the next {minutes} minutes.{" "}
-        <button
-          type="button"
-          onClick={issue}
-          className="font-semibold underline"
-        >
+        <button type="button" onClick={issue} className={styles.mutedLink}>
           Get a new one
         </button>
       </p>
-      <p className="rounded-xl bg-paper p-3 text-sm">
-        <span className="font-bold">Then:</span> restart Claude Code in that
-        folder, approve “glassbox” if it asks, and type <code>/mcp</code> to
-        check it&apos;s connected.
+      <p className={styles.smallBody} style={{ margin: 0 }}>
+        Then restart Claude Code in that folder, approve “glassbox” if it asks,
+        and type <code>/mcp</code> to check it&apos;s connected.
       </p>
     </div>
   );
@@ -403,15 +395,24 @@ export function InstallCommand({ onIssued }: { onIssued?: () => void }) {
 export function ConnectAgent() {
   return (
     <div>
-      <p className="mb-3 text-sm text-ink-soft">
-        One short command connects Claude Code. Cursor, other MCP clients and
-        the REST API are on{" "}
-        <Link href="/connect" className="font-semibold underline">
+      <p className={styles.smallBody} style={{ margin: "0 0 12px" }}>
+        Claude Code, Codex, Cursor or Claude Desktop: get the one-line setup on{" "}
+        <Link href="/connect" className={styles.mutedLink}>
           Connect
         </Link>
         .
       </p>
-      <InstallCommand />
+      <Link
+        href="/connect"
+        className={styles.btnDark}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          textDecoration: "none",
+        }}
+      >
+        Connect an agent
+      </Link>
     </div>
   );
 }
@@ -431,40 +432,43 @@ export function AgentSetup({
   const setups = clientSetups(origin, key);
   const active = setups.find((s) => s.id === tab) ?? setups[0];
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border-2 border-ink bg-card p-5">
-        <h2 className="text-lg font-black">1. Add Glass Box to your agent</h2>
-        <p className="mt-1 mb-4 text-sm text-ink-soft">
-          Click once to create your key, then paste the command for your app.
-        </p>
+    <>
+      <section className={styles.connectCard}>
+        <p className={styles.connectLabel}>1. Add Glass Box to your agent</p>
         {state.kind !== "done" ? (
           <>
+            <p className={styles.stepNote}>
+              Click once to create your key, then paste one command.
+            </p>
             <button
               type="button"
               onClick={() => mint("My agent")}
               disabled={state.kind === "busy"}
-              className="min-h-12 w-full rounded-xl bg-ink px-5 text-base font-bold text-white hover:bg-ink/85 disabled:opacity-60"
+              className={styles.btnDark}
+              style={{ width: "100%" }}
             >
               {state.kind === "busy" ? "Creating your key…" : "Create my key"}
             </button>
             {state.kind === "error" && (
-              <p role="alert" className="mt-2 text-sm font-semibold text-stop">
+              <p
+                role="alert"
+                className={styles.alertCard}
+                style={{ marginTop: 8 }}
+              >
                 {state.message}
               </p>
             )}
           </>
         ) : (
-          <p
-            role="status"
-            className="mb-4 rounded-xl bg-warn-bg p-3 text-sm text-warn"
-          >
-            Your key is filled into the commands below and is only shown now.
-            Keep it private; you can revoke it below.
-          </p>
-        )}
-        {state.kind === "done" && (
           <>
-            <div role="tablist" className="mb-3 flex flex-wrap gap-1.5">
+            <p
+              role="status"
+              className={styles.warnCard}
+              style={{ margin: "0 0 14px" }}
+            >
+              Your key is filled in below and only shown now. Keep it private.
+            </p>
+            <div role="tablist" className={styles.tabRow}>
               {setups.map((s) => (
                 <button
                   key={s.id}
@@ -472,74 +476,64 @@ export function AgentSetup({
                   role="tab"
                   aria-selected={s.id === active.id}
                   onClick={() => setTab(s.id)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-bold ${
-                    s.id === active.id
-                      ? "bg-ink text-white"
-                      : "border border-line text-ink-soft hover:text-ink"
-                  }`}
+                  className={`${styles.tab} ${s.id === active.id ? styles.tabActive : ""}`}
                 >
                   {s.label}
                 </button>
               ))}
             </div>
-            <div role="tabpanel" className="space-y-3">
+            <div role="tabpanel" style={{ display: "grid", gap: 12 }}>
               {active.steps.map((step) => (
                 <div key={step.hint}>
-                  <p className="mb-1.5 text-sm text-ink-soft">{step.hint}</p>
+                  <p className={styles.stepNote}>{step.hint}</p>
                   <CopyBlock code={step.code} />
                 </div>
               ))}
-              <p className="rounded-xl bg-paper p-3 text-sm">
-                <span className="font-bold">Then:</span> {active.after}
+              <p className={styles.smallBody} style={{ margin: 0 }}>
+                Then: {active.after}
               </p>
             </div>
           </>
         )}
       </section>
 
-      <section className="rounded-2xl border border-line bg-card p-5">
-        <h2 className="text-lg font-black">2. Give it a task</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Ask your agent for anything, e.g. “book me dinner in San Francisco”.
-          Before acting it checks in with Glass Box and gives you a link (it
-          also shows up in your{" "}
-          <Link href="/inbox" className="font-semibold underline">
-            inbox
+      <section className={styles.optCard}>
+        <p className={styles.optCardTitle}>2. Give it a task</p>
+        <p className={styles.smallBody} style={{ margin: 0 }}>
+          Ask your agent for anything, like “book me dinner in San Francisco”.
+          Before acting it checks in with Glass Box and sends you a link (it
+          also appears on your{" "}
+          <Link href="/dashboard" className={styles.mutedLink}>
+            dashboard
           </Link>
-          ), where you rank what matters and correct how it would handle real
-          situations. It follows what you send.
+          ). Rank what matters, correct how it would handle real situations, and
+          it follows what you send.
         </p>
       </section>
 
-      <details className="rounded-2xl border border-line bg-card p-5">
-        <summary className="cursor-pointer text-lg font-black">
-          Optional: pop-up window for Claude Code
-        </summary>
-        <p className="mt-1 mb-4 text-sm text-ink-soft">
-          Run this in a project folder and Glass Box opens its window
-          automatically whenever Claude Code checks in, keeps your choices in
-          front of it every turn, and blocks risky commands you ruled out. Mac +
-          Chrome for the window; elsewhere you get the link.
+      <details className={`${styles.optCard} ${styles.disclosure}`}>
+        <summary>Optional: pop-up window for Claude Code</summary>
+        <p className={styles.stepNote}>
+          Opens Glass Box automatically whenever Claude Code checks in, keeps
+          your choices in front of it, and blocks commands you ruled out. Run it
+          in a project folder.
         </p>
         <InstallCommand onIssued={onMinted} />
       </details>
 
-      <details className="rounded-2xl border border-line bg-card p-5">
-        <summary className="cursor-pointer text-lg font-black">
-          REST API and more
-        </summary>
-        <div className="mt-4 space-y-5">
+      <details className={`${styles.optCard} ${styles.disclosure}`}>
+        <summary>REST API</summary>
+        <div style={{ display: "grid", gap: 12 }}>
           {setupSnippets(origin, key)
-            .filter((s) => s.id === "rest" || s.id === "generic")
+            .filter((s) => s.id === "rest")
             .map((s) => (
               <div key={s.id}>
-                <h3 className="font-bold">{s.title}</h3>
-                <p className="mb-2 text-sm text-ink-soft">{s.hint}</p>
+                <p className={styles.stepNote}>{s.hint}</p>
                 <CopyBlock code={s.code} />
               </div>
             ))}
         </div>
       </details>
-    </div>
+    </>
   );
 }

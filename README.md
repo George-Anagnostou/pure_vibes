@@ -1,5 +1,7 @@
 # GlassBox
 
+**See how your AI _really_ works.**
+
 GlassBox is the opposite of a black box: it makes AI agent work visible and understandable, helping people inspect and guide agents for better human-agent alignment. The canonical repository is `George-Anagnostou/pure_vibes`.
 
 ## Current product prototype

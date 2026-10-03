@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Glass Box",
   description:
-    "Guardrails tell an agent what it can't do. Glass Box tells it what you actually care about.",
+    "See how your AI really works. Your agent shares its plan, you set the priorities, it follows them.",
 };
 
 export const viewport: Viewport = {

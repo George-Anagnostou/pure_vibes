@@ -25,7 +25,7 @@ export default async function SignInPage({
     <Shell minimal>
       <main className={styles.onboardShell}>
         <h1 className={`${styles.taskHeader} ${styles.pretty}`}>
-          Your Glass Box account
+          See how your AI <em>really</em> works
         </h1>
         <p className={styles.agentName}>
           Sign in or create an account with your email. No password needed.

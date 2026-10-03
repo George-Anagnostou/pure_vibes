@@ -1575,3 +1575,103 @@
   font-weight: 400;
   color: #000;
 }
+
+/* ---- Connect: copyable commands and app tabs (dark glass, per DESIGN.md) ---- */
+.codeWrap {
+  position: relative;
+}
+.codeBlock {
+  margin: 0;
+  padding: 12px 70px 12px 14px;
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.copyBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: 0;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.tabRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.tab {
+  min-height: 0;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.55);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.tabActive {
+  background: rgba(10, 10, 12, 0.82);
+  border-color: transparent;
+  color: #fff;
+}
+.stepNote {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: rgba(0, 0, 0, 0.55);
+}
+.connectStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 16px 64px;
+}
+.connectStack .connectCard,
+.connectStack .optCard {
+  max-width: none;
+}
+.disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.95rem;
+  color: #000;
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary::after {
+  content: " ▾";
+  color: rgba(0, 0, 0, 0.45);
+}
+.disclosure[open] > summary {
+  margin-bottom: 12px;
+}
+
+/* Grid children default to min-width: auto, so a long project name could push the
+   dashboard wider than the viewport. Let them shrink; names truncate instead. */
+.homeHead,
+.homeMain,
+.homeSide,
+.projectList,
+.projectTile {
+  min-width: 0;
+}

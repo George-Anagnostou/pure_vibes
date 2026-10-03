@@ -39,13 +39,20 @@ export default async function ConnectPage() {
     );
 
   return (
-    <main className="mx-auto max-w-2xl px-4 pt-6 pb-16">
-      <h1 className="text-2xl font-black tracking-tight">Connect an agent</h1>
-      <p className="mt-1 mb-6 text-ink-soft">
-        Works with Claude Code, Codex, Cursor and any MCP client. One click, one
-        command, and your agent checks its plan with you before it acts.
-      </p>
-      <ConnectClient origin={appUrl()} keys={keys ?? []} />
-    </main>
+    <Shell>
+      <main className={styles.connectStack}>
+        <h1
+          className={`${styles.taskHeader} ${styles.pretty}`}
+          style={{ marginTop: 28 }}
+        >
+          Connect your <i>agent</i>.
+        </h1>
+        <p className={styles.cardHint} style={{ marginBottom: 8 }}>
+          Works with Claude Code, Codex, Cursor and Claude Desktop. One click,
+          one command.
+        </p>
+        <ConnectClient origin={appUrl()} keys={keys ?? []} />
+      </main>
+    </Shell>
   );
 }
