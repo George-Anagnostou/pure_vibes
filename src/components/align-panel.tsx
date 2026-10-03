@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   readDecisions,
   readDecisionSuggestions,
@@ -10,11 +10,11 @@ import {
   samePriority,
   type AlignReview,
 } from "@/components/align-data";
-import {
-  PriorityBoard,
-  type Board,
-  type BoardItem,
-} from "@/components/priority-board";
+import type { Board, BoardItem } from "@/components/priority-board";
+import styles from "@/components/glassbox/glassbox.module.css";
+import local from "@/components/glassbox/align.module.css";
+import { PlusIcon } from "@/components/glassbox/plus-icon";
+import { RankedPriorities } from "@/components/glassbox/ranked-priorities";
 import { ChallengeCards, type Ruling } from "@/components/challenge-cards";
 import {
   answerFor,
@@ -96,15 +96,18 @@ function initialBoard(review: AlignReview): Board {
   return { ranked, pool };
 }
 
-// The whole review in one screen: how the agent is approaching the task, the
-// decisions it's making for you (keep, switch, or say what you want), anything else
-// it should know, send. Used on /align/[id] and in the inbox.
+// The whole review in one screen, on Kathryn's design system (DESIGN.md): what the
+// agent thinks the task is, its ranked priorities (drag, remove, pull in Glass Box's
+// suggestions or add your own), its answers to the challenges, the decisions it's
+// making for you, then Continue. Used on /align/[id] and in the inbox sheet.
 export function AlignPanel({
   review,
   onDone,
+  compact = false,
 }: {
   review: AlignReview;
   onDone?: () => void;
+  compact?: boolean; // single column (inbox sheet)
 }) {
   const cards = useMemo(
     () =>
@@ -127,12 +130,23 @@ export function AlignPanel({
     [review.priorities],
   );
 
+  // Removing a Glass Box suggestion puts it back in the optional list.
   function deletePriority(item: BoardItem) {
     setBoard((b) => ({
       ranked: b.ranked.filter((i) => i.id !== item.id),
-      pool: b.pool.filter((i) => i.id !== item.id),
+      pool:
+        item.origin === "suggested" && !b.pool.some((i) => i.id === item.id)
+          ? [...b.pool, item]
+          : b.pool.filter((i) => i.id !== item.id),
     }));
     if (item.origin === "agent") setDeleted((d) => [...d, item]);
+  }
+
+  function pullIn(item: BoardItem) {
+    setBoard((b) => ({
+      ranked: [...b.ranked, item],
+      pool: b.pool.filter((i) => i.id !== item.id),
+    }));
   }
 
   function addPriority(name: string) {
@@ -262,46 +276,35 @@ export function AlignPanel({
 
   if (phase.kind === "sent" || phase.kind === "rejected") {
     return (
-      <div role="status" className="space-y-5">
-        {phase.kind === "sent" ? (
-          <>
-            <div>
-              <p className="text-2xl font-black tracking-tight">Sent.</p>
-              <p className="mt-1 text-ink-soft">
-                {review.agent_name} will follow your decisions.
-              </p>
-            </div>
-            {phase.priorities.length > 0 && (
-              <p className="text-[14px]">
-                <span className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
-                  Priorities
-                </span>
-                <span className="block font-semibold">
-                  {phase.priorities.join(" > ")}
-                </span>
-              </p>
-            )}
-            <FinalDecisions
-              decisions={phase.decisions}
-              instructions={phase.instructions}
-            />
-          </>
-        ) : (
-          <div>
-            <p className="text-2xl font-black tracking-tight">Stopped.</p>
-            <p className="mt-1 text-ink-soft">
-              {review.agent_name} won&apos;t go ahead with this.
-            </p>
-          </div>
+      <div role="status" className={styles.confirm}>
+        <div className={styles.confirmMark} aria-hidden>
+          {phase.kind === "sent" ? "✓" : "✕"}
+        </div>
+        <h2 className={styles.confirmTitle}>
+          {phase.kind === "sent" ? `Sent to ${review.agent_name}` : "Stopped"}
+        </h2>
+        <p className={styles.confirmSub}>
+          {phase.kind === "sent"
+            ? "It will follow your priorities and check in before anything risky."
+            : `${review.agent_name} won't go ahead with this.`}
+        </p>
+        {phase.kind === "sent" && (
+          <FinalDecisions
+            priorities={phase.priorities}
+            decisions={phase.decisions}
+            instructions={phase.instructions}
+          />
         )}
         {onDone && (
-          <button
-            type="button"
-            onClick={onDone}
-            className="min-h-12 w-full rounded-xl border-2 border-ink font-bold"
-          >
-            Done
-          </button>
+          <div className={styles.submitBar}>
+            <button
+              type="button"
+              onClick={onDone}
+              className={styles.btnSecondary}
+            >
+              Done
+            </button>
+          </div>
         )}
       </div>
     );
@@ -310,20 +313,22 @@ export function AlignPanel({
   // Decided somewhere else (another tab/device) while this was open.
   if (phase.kind === "editing" && review.status !== "pending") {
     return (
-      <div role="status" className="space-y-5">
-        <p className="text-ink-soft">
+      <div role="status" className={styles.confirm}>
+        <p className={styles.confirmSub}>
           This request was already{" "}
           {review.status === "approved" ? "sent" : review.status} from another
           window.
         </p>
         {onDone && (
-          <button
-            type="button"
-            onClick={onDone}
-            className="min-h-12 w-full rounded-xl border-2 border-ink font-bold"
-          >
-            Close
-          </button>
+          <div className={styles.submitBar}>
+            <button
+              type="button"
+              onClick={onDone}
+              className={styles.btnSecondary}
+            >
+              Close
+            </button>
+          </div>
         )}
       </div>
     );
@@ -333,173 +338,229 @@ export function AlignPanel({
   const approach =
     review.plan && !review.plan.startsWith("(no ") ? review.plan : "";
 
+  function submitOwn(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const input = e.currentTarget.elements.namedItem("own") as HTMLInputElement;
+    const name = input.value.trim().slice(0, 120);
+    if (!name) return;
+    addPriority(name);
+    input.value = "";
+  }
+
   return (
-    <div className="space-y-5">
-      {review.understanding && (
-        <section className="rounded-xl border border-line bg-card px-3 py-2.5">
-          <h2 className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
-            What it thinks the task is
+    <div
+      className={
+        compact ? local.compact : `${styles.alignLayout} ${local.desktop}`
+      }
+    >
+      <div>
+        {(review.understanding || approach) && (
+          <div className={local.contextList}>
+            {review.understanding && (
+              <Context title="What i think the task is">
+                {review.understanding}
+              </Context>
+            )}
+            {approach && (
+              <Context title="How i'll approach it">{approach}</Context>
+            )}
+          </div>
+        )}
+
+        <section className={styles.card} aria-labelledby={`pri-${review.id}`}>
+          <h2 id={`pri-${review.id}`} className={styles.cardTitle}>
+            Your priorities
           </h2>
-          <p className="mt-1 text-[14px] leading-snug">
-            {review.understanding}
+          <p className={styles.cardHint}>
+            Drag to reorder — #1 wins every conflict. Tap a tile to remove it.
           </p>
+          {board.ranked.length ? (
+            <RankedPriorities
+              items={board.ranked}
+              onChange={(ranked) => setBoard((b) => ({ ...b, ranked }))}
+              onRemove={deletePriority}
+            />
+          ) : (
+            <p className={`${styles.cardHint} ${local.empty}`}>
+              No priorities left. Add one, or send decisions only.
+            </p>
+          )}
         </section>
-      )}
 
-      {approach && (
-        <details className="group rounded-xl bg-paper px-3 py-2.5">
-          <summary className="flex cursor-pointer list-none items-baseline gap-2 [&::-webkit-details-marker]:hidden">
-            <span className="text-[11px] font-bold tracking-wide whitespace-nowrap text-ink-soft uppercase">
-              How it&apos;s approaching this
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-soft group-open:hidden">
-              {approach}
-            </span>
-            <span
-              aria-hidden
-              className="text-xs text-ink-soft transition-transform group-open:rotate-180"
-            >
-              ▾
-            </span>
-          </summary>
-          <p className="mt-1 text-[14px] leading-snug">{approach}</p>
-        </details>
-      )}
+        {challenges.length > 0 && (
+          <section className={styles.card} aria-labelledby={`ch-${review.id}`}>
+            <h2 id={`ch-${review.id}`} className={styles.cardTitle}>
+              How i&apos;d handle real situations
+            </h2>
+            <p className={styles.cardHint}>
+              Each one forces a trade-off between my priorities. Confirm my
+              answer or tell me what to do instead.
+            </p>
+            <ChallengeCards
+              challenges={challenges}
+              ranked={agentRanking}
+              rulings={rulings}
+              onRule={(id, r) => setRulings((prev) => ({ ...prev, [id]: r }))}
+            />
+          </section>
+        )}
 
-      {(board.ranked.length > 0 || board.pool.length > 0) && (
-        <section aria-labelledby={`pri-${review.id}`}>
-          <h2
-            id={`pri-${review.id}`}
-            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
-          >
-            What it&apos;s weighing, ranked
-          </h2>
-          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
-            Drag to re-rank (top wins when they conflict), pull in Glass
-            Box&apos;s suggestions, ✕ to delete, or add your own.
+        {cards.length > 0 && (
+          <section className={styles.card} aria-labelledby={`dec-${review.id}`}>
+            <h2 id={`dec-${review.id}`} className={styles.cardTitle}>
+              Decisions i&apos;m making for you
+            </h2>
+            <p className={styles.cardHint}>
+              Keep my choice, pick another, or tell me what you actually want.
+            </p>
+            <DecisionCards
+              cards={cards}
+              answers={answers}
+              onAnswer={(key, a) =>
+                setAnswers((prev) => ({ ...prev, [key]: a }))
+              }
+            />
+          </section>
+        )}
+
+        <section className={styles.card}>
+          <ExtraInstructions items={instructions} onChange={setInstructions} />
+        </section>
+      </div>
+
+      <aside className={styles.sideSticky}>
+        <div className={styles.optCard}>
+          <p className={styles.optCardTitle}>
+            Additional optional values you may add
           </p>
-          <PriorityBoard
-            board={board}
-            onChange={setBoard}
-            onDelete={deletePriority}
-            onAdd={addPriority}
-          />
-        </section>
-      )}
+          <div className={styles.optList}>
+            {board.pool.length === 0 && (
+              <p className={local.empty}>
+                Glass Box has no other suggestions. Add your own below.
+              </p>
+            )}
+            {board.pool.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={styles.optRow}
+                onClick={() => pullIn(item)}
+              >
+                <PlusIcon className={styles.sugChipIcon} />
+                <span className={styles.optRowBody}>
+                  <span>{item.name}</span>
+                  {item.detail && (
+                    <span className={styles.optRowReason}>{item.detail}</span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+          <form className={local.addForm} onSubmit={submitOwn}>
+            <input
+              name="own"
+              className={local.addInput}
+              placeholder="Add your own priority"
+              aria-label="Add your own priority"
+              maxLength={120}
+            />
+            <button type="submit" className={local.addButton}>
+              Add
+            </button>
+          </form>
+        </div>
 
-      {challenges.length > 0 && (
-        <section aria-labelledby={`ch-${review.id}`}>
-          <h2
-            id={`ch-${review.id}`}
-            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
-          >
-            How it would handle real situations
-          </h2>
-          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
-            Glass Box put these to the agent; each forces a trade-off between
-            its priorities. Confirm its answer or tell it what to do instead.
-          </p>
-          <ChallengeCards
-            challenges={challenges}
-            ranked={agentRanking}
-            rulings={rulings}
-            onRule={(id, r) => setRulings((prev) => ({ ...prev, [id]: r }))}
-          />
-        </section>
-      )}
-
-      {cards.length > 0 && (
-        <section aria-labelledby={`dec-${review.id}`}>
-          <h2
-            id={`dec-${review.id}`}
-            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
-          >
-            Decisions it&apos;s making for you
-          </h2>
-          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
-            Keep its choice, pick another, or tell it what you actually want.
-          </p>
-          <DecisionCards
-            cards={cards}
-            answers={answers}
-            onAnswer={(key, a) => setAnswers((prev) => ({ ...prev, [key]: a }))}
-          />
-        </section>
-      )}
-
-      <ExtraInstructions items={instructions} onChange={setInstructions} />
-
-      <div className="space-y-3">
         {error && (
-          <p role="alert" className="text-sm font-semibold text-stop">
+          <p role="alert" className={local.error}>
             {error}
           </p>
         )}
-        <button
-          type="button"
-          onClick={send}
-          disabled={busy}
-          className="min-h-14 w-full rounded-xl bg-ink px-5 text-lg font-bold text-white hover:bg-ink/85 disabled:opacity-70"
-        >
-          {phase.kind === "busy" && phase.action === "send" ? (
-            <span className="gb-pulse">Sending…</span>
-          ) : changes ? (
-            `Send ${changes} change${changes === 1 ? "" : "s"} to ${review.agent_name}`
-          ) : (
-            `Looks right, send to ${review.agent_name}`
-          )}
-        </button>
-        <p className="text-center">
+        <div className={styles.submitBar}>
           <button
             type="button"
-            onClick={reject}
+            onClick={send}
             disabled={busy}
-            className="text-sm font-semibold text-ink-soft underline underline-offset-4 hover:text-stop disabled:opacity-60"
+            className={styles.submit}
           >
-            {phase.kind === "busy" && phase.action === "reject"
-              ? "Stopping…"
-              : "Stop, don't do this"}
+            {phase.kind === "busy" && phase.action === "send" ? (
+              <span className="gb-pulse">Sending…</span>
+            ) : changes ? (
+              `Send ${changes} change${changes === 1 ? "" : "s"} to ${review.agent_name}`
+            ) : (
+              "Continue"
+            )}
           </button>
-        </p>
-      </div>
+        </div>
+        <button
+          type="button"
+          onClick={reject}
+          disabled={busy}
+          className={styles.btnSecondary}
+        >
+          {phase.kind === "busy" && phase.action === "reject"
+            ? "Stopping…"
+            : "Stop, don't do this"}
+        </button>
+      </aside>
     </div>
   );
 }
 
+// One line until tapped, then the full text.
+function Context({ title, children }: { title: string; children: string }) {
+  return (
+    <details className={local.disclosure}>
+      <summary className={local.disclosureSummary}>
+        <span className={local.disclosureTitle}>{title}</span>
+        <span className={local.disclosurePreview}>{children}</span>
+        <svg
+          className={local.disclosureChevron}
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden
+        >
+          <path d="M3 4.5 6 7.5 9 4.5" />
+        </svg>
+      </summary>
+      <p className={local.disclosureBody}>{children}</p>
+    </details>
+  );
+}
+
 export function FinalDecisions({
+  priorities = [],
   decisions,
   instructions = [],
 }: {
+  priorities?: string[];
   decisions: FinalDecision[];
   instructions?: string[];
 }) {
   return (
-    <ul className="space-y-1.5">
+    <ul className={local.summary}>
+      {priorities.length > 0 && (
+        <li className={local.summaryItem}>
+          <span className={local.summaryLabel}>Priorities</span>
+          <span className={local.summaryValue}>{priorities.join(" > ")}</span>
+        </li>
+      )}
       {decisions.map((d) => (
-        <li
-          key={d.topic}
-          className="rounded-xl border border-line bg-card px-3 py-2 text-[14px]"
-        >
-          <span className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
+        <li key={d.topic} className={local.summaryItem}>
+          <span className={local.summaryLabel}>
             {d.topic}
+            {d.changed && <span className={local.changed}>· changed</span>}
           </span>
-          {d.changed && (
-            <span className="ml-1.5 rounded bg-ink px-1 py-px text-[10px] font-semibold text-white uppercase">
-              Changed
-            </span>
-          )}
-          <span className="block font-semibold">{d.answer}</span>
+          <span className={local.summaryValue}>{d.answer}</span>
         </li>
       ))}
       {instructions.map((t) => (
-        <li
-          key={t}
-          className="rounded-xl border border-dashed border-line bg-card px-3 py-2 text-[14px]"
-        >
-          <span className="text-[11px] font-bold tracking-wide text-go uppercase">
-            You added
-          </span>
-          <span className="block font-semibold">{t}</span>
+        <li key={t} className={local.summaryItem}>
+          <span className={local.summaryLabel}>You added</span>
+          <span className={local.summaryValue}>{t}</span>
         </li>
       ))}
     </ul>

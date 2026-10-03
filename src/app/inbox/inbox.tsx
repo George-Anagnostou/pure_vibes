@@ -8,6 +8,7 @@ import {
   type AlignReview,
 } from "@/components/align-data";
 import { AlignPanel } from "@/components/align-panel";
+import { glassboxFonts } from "@/components/glassbox/fonts";
 import { ConnectAgent } from "@/components/connect-agent";
 import { createClient } from "@/lib/supabase/client";
 import { useNotificationPermission } from "./use-notification-permission";
@@ -250,7 +251,7 @@ function RequestSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`sheet-${review.id}`}
-        className="max-h-[94dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl"
+        className={`${glassboxFonts} max-h-[94dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-3xl`}
       >
         <div className="flex items-start gap-3">
           <p
@@ -270,7 +271,12 @@ function RequestSheet({
           </button>
         </div>
         <div className="mt-5">
-          <AlignPanel key={review.id} review={review} onDone={onClose} />
+          <AlignPanel
+            key={review.id}
+            review={review}
+            onDone={onClose}
+            compact
+          />
         </div>
       </div>
     </div>
