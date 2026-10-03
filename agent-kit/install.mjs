@@ -142,16 +142,20 @@ const ours = {
     hooks: [hook("glassbox-popup.mjs", 10)],
   },
 };
-const isOurs = (entry) =>
-  entry?.hooks?.some?.((h) =>
-    String(h?.command ?? "").includes(".claude/hooks/glassbox/"),
-  );
+const isOurHook = (hook) =>
+  String(hook?.command ?? "").includes(".claude/hooks/glassbox/");
 settings.hooks = { ...settings.hooks };
 for (const [event, entry] of Object.entries(ours)) {
   const existing = Array.isArray(settings.hooks[event])
     ? settings.hooks[event]
     : [];
-  settings.hooks[event] = [...existing.filter((e) => !isOurs(e)), entry];
+  const preserved = existing.flatMap((oldEntry) => {
+    if (!Array.isArray(oldEntry?.hooks) || !oldEntry.hooks.some(isOurHook))
+      return [oldEntry];
+    const hooks = oldEntry.hooks.filter((oldHook) => !isOurHook(oldHook));
+    return hooks.length ? [{ ...oldEntry, hooks }] : [];
+  });
+  settings.hooks[event] = [...preserved, entry];
 }
 writeJson(settingsPath, settings);
 
