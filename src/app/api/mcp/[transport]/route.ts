@@ -1,11 +1,11 @@
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { createMcpHandler } from "mcp-handler";
 import {
   ChallengeAnswerSchema,
   DecisionSchema,
   StatedPrioritySchema,
 } from "@/lib/glassbox/types";
 import { z } from "zod";
-import { requireAgent } from "@/lib/glassbox/agent-auth";
+import { mcpPreflight, withGlassboxAuth } from "@/lib/glassbox/mcp-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
 import {
   answerChallenges,
@@ -321,24 +321,13 @@ const handler = createMcpHandler(
   { serverInfo: { name: "glass-box", version: "0.3.0" } },
 );
 
-const authed = withMcpAuth(
-  handler,
-  async (req, bearerToken) => {
-    if (!bearerToken?.startsWith("gb_")) return undefined;
-    try {
-      const { userId, agentName, agentKeyId } = await requireAgent(req);
-      return {
-        token: bearerToken,
-        clientId: agentKeyId,
-        scopes: [],
-        extra: { userId, agentName },
-      };
-    } catch (error) {
-      if (error instanceof HttpError) return undefined;
-      throw error;
-    }
-  },
-  { required: true },
-);
+// Bearer header or ?key= query, clean 401 + WWW-Authenticate, and open CORS
+// for browser-based MCP clients. See src/lib/glassbox/mcp-auth.ts.
+const authed = withGlassboxAuth(handler);
 
-export { authed as GET, authed as POST, authed as DELETE };
+export {
+  authed as GET,
+  authed as POST,
+  authed as DELETE,
+  mcpPreflight as OPTIONS,
+};
