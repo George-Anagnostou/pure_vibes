@@ -1,93 +1,171 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-
+import { useId, useState, type FormEvent } from "react";
 export const NEXT_PATH_KEY = "glassbox:next";
 
-// Magic-link sign-in via the existing /api/auth/sign-in route. The callback
-// always lands on "/", so remember where to go next in this browser.
-export function SignInForm({ nextPath }: { nextPath?: string }) {
-  const [state, setState] = useState<
-    | { kind: "idle" }
-    | { kind: "busy" }
-    | { kind: "sent"; message: string }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
+export function SignInForm({
+  nextPath = "/account",
+  allowExistingCode = false,
+}: {
+  nextPath?: string;
+  allowExistingCode?: boolean;
+}) {
+  const id = useId();
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  const [showCode, setShowCode] = useState(allowExistingCode);
+  const [busy, setBusy] = useState<"send" | "verify" | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [retryAt, setRetryAt] = useState(0);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const email = new FormData(event.currentTarget).get("email");
-    setState({ kind: "busy" });
+    setError("");
+    setMessage("");
+    if (Date.now() < retryAt) {
+      setError("Wait a minute before requesting another email.");
+      return;
+    }
+    setBusy("send");
     try {
-      if (nextPath) {
-        try {
-          localStorage.setItem(NEXT_PATH_KEY, nextPath);
-        } catch {
-          // Storage can be unavailable (private mode); the link still works.
-        }
-      }
       const res = await fetch("/api/auth/sign-in", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim(), next: nextPath }),
       });
-      const body = (await res.json().catch(() => ({}))) as {
-        message?: string;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(body.error ?? "Could not send a link.");
-      setState({
-        kind: "sent",
-        message: body.message ?? "Check your email for a sign-in link.",
-      });
-    } catch (error) {
-      setState({
-        kind: "error",
-        message:
-          error instanceof Error ? error.message : "Could not send a link.",
-      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Could not send an email.");
+      setSentTo(email.trim());
+      setShowCode(true);
+      setRetryAt(Date.now() + 60_000);
+      setMessage(body.message);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not send an email. Try again.",
+      );
+    } finally {
+      setBusy(null);
     }
   }
 
-  if (state.kind === "sent") {
-    return (
-      <p
-        role="status"
-        className="rounded-xl bg-go-bg p-4 font-semibold text-go"
-      >
-        {state.message}
-      </p>
-    );
+  async function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = String(
+      new FormData(event.currentTarget).get("token") ?? "",
+    ).trim();
+    setBusy("verify");
+    setError("");
+    try {
+      const res = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: sentTo || email.trim(),
+          token,
+          next: nextPath,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Could not verify the code.");
+      window.location.replace(body.next);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not sign in. Try again.",
+      );
+      setBusy(null);
+    }
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <label htmlFor="email" className="block text-sm font-semibold">
-        Email
-      </label>
-      <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="space-y-5">
+      <form onSubmit={send} className="space-y-3">
+        <label htmlFor={`${id}-email`} className="block text-sm font-semibold">
+          Email
+        </label>
         <input
-          id="email"
+          id={`${id}-email`}
           name="email"
           type="email"
           autoComplete="email"
           required
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setSentTo("");
+            setMessage("");
+          }}
           placeholder="you@example.com"
-          disabled={state.kind === "busy"}
-          className="min-h-12 flex-1 rounded-xl border border-line bg-card px-4 text-base outline-none focus:border-ink"
+          disabled={busy !== null}
+          className="min-h-12 w-full rounded-xl border border-line bg-card px-4 text-base outline-none focus:border-ink"
         />
         <button
-          disabled={state.kind === "busy"}
-          className="min-h-12 rounded-xl bg-ink px-5 font-bold text-white hover:bg-ink/85 disabled:opacity-60"
+          disabled={busy !== null}
+          className="min-h-12 w-full rounded-xl bg-ink px-5 font-bold text-white hover:bg-ink/85 disabled:opacity-60"
         >
-          {state.kind === "busy" ? "Sending…" : "Email me a sign-in link"}
+          {busy === "send"
+            ? "Sending…"
+            : sentTo
+              ? "Send a new email"
+              : "Email me a sign-in link"}
         </button>
-      </div>
-      {state.kind === "error" && (
-        <p role="alert" className="text-sm font-semibold text-stop">
-          {state.message}
+      </form>
+      {message && (
+        <p
+          role="status"
+          className="rounded-xl bg-go-bg p-4 text-sm font-semibold text-go"
+        >
+          {message}
         </p>
       )}
-    </form>
+      {showCode ? (
+        <form onSubmit={verify} className="space-y-3 border-t border-line pt-5">
+          <label
+            htmlFor={`${id}-token`}
+            className="block text-sm font-semibold"
+          >
+            If your email includes a code
+          </label>
+          <p className="text-sm text-ink-soft">
+            Use the email address above. A code works even if you opened the
+            email on another device.
+          </p>
+          <input
+            id={`${id}-token`}
+            name="token"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]{6,10}"
+            minLength={6}
+            maxLength={10}
+            autoComplete="one-time-code"
+            required
+            disabled={busy !== null}
+            className="min-h-12 w-full rounded-xl border border-line bg-card px-4 text-lg tracking-widest outline-none focus:border-ink"
+          />
+          <button
+            disabled={busy !== null || !email.trim()}
+            className="min-h-12 w-full rounded-xl border-2 border-ink px-5 font-bold disabled:opacity-60"
+          >
+            {busy === "verify" ? "Signing in…" : "Verify code and sign in"}
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowCode(true)}
+          className="text-sm underline underline-offset-4"
+        >
+          I already have a sign-in code
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="text-sm font-semibold text-stop">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

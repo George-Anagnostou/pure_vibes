@@ -24,7 +24,7 @@ export function SiteNav() {
         </Link>
         <NavLink href="/inbox">Inbox</NavLink>
         <NavLink href="/connect">Connect</NavLink>
-        <NavLink href="/profile">Profile</NavLink>
+        <NavLink href="/account">Account</NavLink>
       </nav>
     </header>
   );

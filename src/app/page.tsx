@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ResumeAfterSignIn, SignOutButton } from "@/components/session-actions";
 import { SignInForm } from "@/components/sign-in-form";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,8 @@ export default async function Home({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  if (params.billing === "success" || params.billing === "cancelled")
+    redirect(`/account?billing=${params.billing}`);
   const { email, failed } = await currentEmail();
 
   return (

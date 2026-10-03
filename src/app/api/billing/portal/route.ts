@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       throw new HttpError(409, "Start a subscription before opening billing.");
     const session = await stripeClient().billingPortal.sessions.create({
       customer: data.stripe_customer_id,
-      return_url: `${appUrl()}/`,
+      return_url: `${appUrl()}/account`,
     });
     return json({ url: session.url });
   } catch (error) {
