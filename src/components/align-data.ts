@@ -38,6 +38,7 @@ export type AlignReview = {
   plan?: string | null;
   status: string;
   stated: Json;
+  priorities?: Json;
   critique: Json | null;
   created_at: string;
 };
@@ -220,4 +221,42 @@ export function readAnswers(value: Json | undefined) {
         ]
       : [],
   );
+}
+
+// Glass Box's priority suggestions (add_priority → "also consider"; drop/raise/lower → hints).
+export type UiPrioritySuggestion = {
+  action:
+    "add_priority" | "drop_priority" | "raise_priority" | "lower_priority";
+  ref: number;
+  name: string;
+  why: string;
+};
+
+export function readPrioritySuggestions(
+  critique: Json | null,
+): UiPrioritySuggestion[] {
+  if (!isObject(critique) || !Array.isArray(critique.suggestions)) return [];
+  return critique.suggestions.flatMap((s) => {
+    if (!isObject(s)) return [];
+    const action = str(s.action);
+    if (
+      ![
+        "add_priority",
+        "drop_priority",
+        "raise_priority",
+        "lower_priority",
+      ].includes(action)
+    )
+      return [];
+    const name = str(s.topic) || str(s.recommend);
+    if (!name) return [];
+    return [
+      {
+        action: action as UiPrioritySuggestion["action"],
+        ref: typeof s.ref === "number" ? s.ref : 0,
+        name,
+        why: str(s.why),
+      },
+    ];
+  });
 }

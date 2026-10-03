@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DecisionSchema } from "@/lib/glassbox/types";
+import { DecisionSchema, StatedPrioritySchema } from "@/lib/glassbox/types";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { createReview } from "@/lib/glassbox/reviews";
 import { errorResponse, json, readJson } from "@/lib/http";
@@ -11,6 +11,7 @@ const body = z.object({
   task: z.string().trim().min(1).max(4000),
   plan: z.string().trim().max(15000).optional(), // the agent's approach
   agent_name: z.string().trim().max(100).optional(),
+  priorities: z.array(StatedPrioritySchema).max(12).optional(),
   decisions: z.array(DecisionSchema).min(1).max(12),
 });
 
@@ -21,13 +22,17 @@ const body = z.object({
 export async function POST(request: Request) {
   try {
     const agent = await requireAgent(request);
-    const { task, plan, agent_name, decisions } = await readJson(request, body);
+    const { task, plan, agent_name, decisions, priorities } = await readJson(
+      request,
+      body,
+    );
     const result = await createReview({
       userId: agent.userId,
       agentName: agent_name ?? agent.agentName,
       task,
       plan,
       decisions,
+      priorities,
     });
     return json(
       {

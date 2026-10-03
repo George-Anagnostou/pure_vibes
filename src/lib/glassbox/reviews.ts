@@ -10,6 +10,7 @@ import type {
   Dials,
   Revealed,
   ReviewStatus,
+  StatedPriority,
 } from "@/lib/glassbox/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ContractRow, Json } from "@/types/database";
@@ -32,13 +33,16 @@ export async function createReview(input: {
   agentName: string;
   task: string;
   plan?: string; // the agent's overall approach
+  priorities?: StatedPriority[]; // what it's weighing, highest first
   decisions?: Decision[];
 }): Promise<ReviewResult> {
   const decisions = input.decisions ?? [];
+  const priorities = input.priorities ?? [];
   const { revealed, critique } = await revealAndCritique({
     task: input.task,
     plan: input.plan,
     stated: decisions,
+    priorities,
   });
   const { data, error } = await createAdminClient()
     .from("reviews")
@@ -48,6 +52,7 @@ export async function createReview(input: {
       task: input.task,
       plan: input.plan?.trim() || "(no approach given)",
       stated: decisions as unknown as Json,
+      priorities: priorities as unknown as Json,
       revealed: revealed as unknown as Json,
       critique: critique as unknown as Json,
     })
@@ -63,38 +68,67 @@ export async function createReview(input: {
 }
 
 export const CONTRACT_INSTRUCTIONS =
-  "These decisions are binding: the human made them, not you. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
+  "This is binding: the human decided, not you. Weigh trade-offs in the order of ranked_priorities (first wins), never optimize for anything in removed_priorities, and treat added_priorities as requirements. For every decision, do what `decision` says, especially the ones marked changed_by_human, and drop your original choice. Follow plan_guidance and every entry in instructions_from_human. If a new decision comes up that the human hasn't made, or your approach changes, call align again rather than guessing. Call checkpoint before spending, deleting, contacting anyone, or accessing anything new, and never perform an action checkpoint blocks.";
 
-// "You changed 2 of 6 decisions: Scope → 3-hospital proof of concept; …"
+// "Priorities: Cost > Accuracy > Speed (added Cost; removed Completeness). Changed 2 of 6 decisions: …"
 export function describeDecisions(
   decisions: DecisionAnswer[],
   instructions: string[],
+  priorities: { ranked: string[]; added: string[]; removed: string[] } = {
+    ranked: [],
+    added: [],
+    removed: [],
+  },
 ) {
+  const parts: string[] = [];
+  if (priorities.ranked.length) {
+    const edits = [
+      priorities.added.length ? `added ${priorities.added.join(", ")}` : "",
+      priorities.removed.length
+        ? `removed ${priorities.removed.join(", ")}`
+        : "",
+    ].filter(Boolean);
+    parts.push(
+      `The human ranked your priorities: ${priorities.ranked.join(" > ")}${edits.length ? ` (${edits.join("; ")})` : ""}.`,
+    );
+  }
   const changed = decisions.filter((d) => d.changed);
-  const head = changed.length
-    ? `The human changed ${changed.length} of ${decisions.length} decisions: ${changed
-        .map((d) => `${d.topic} → ${d.answer}`)
-        .join("; ")}.`
-    : `The human kept all ${decisions.length} of your decisions.`;
-  return instructions.length
-    ? `${head} They also told you: ${instructions.join("; ")}.`
-    : head;
+  if (decisions.length)
+    parts.push(
+      changed.length
+        ? `The human changed ${changed.length} of ${decisions.length} decisions: ${changed
+            .map((d) => `${d.topic} → ${d.answer}`)
+            .join("; ")}.`
+        : `The human kept all ${decisions.length} of your decisions.`,
+    );
+  if (instructions.length)
+    parts.push(`They also told you: ${instructions.join("; ")}.`);
+  return parts.join(" ");
 }
 
 export function toContract(row: ContractRow): Contract {
   const hardLines = row.hard_lines as Record<string, boolean>;
-  const decisions = ((row.decisions as DecisionAnswer[] | null) ?? []).map(
-    (d) => ({
-      topic: d.topic,
-      question: d.question,
-      decision: d.answer,
-      changed_by_human: d.changed,
-      ...(d.changed && d.agent_choice
-        ? { your_original_choice: d.agent_choice }
-        : {}),
-    }),
+  const answers = (row.decisions as DecisionAnswer[] | null) ?? [];
+  const decisions = answers.map((d) => ({
+    topic: d.topic,
+    question: d.question,
+    decision: d.answer,
+    changed_by_human: d.changed,
+    ...(d.changed && d.agent_choice
+      ? { your_original_choice: d.agent_choice }
+      : {}),
+  }));
+  // Typed instructions are stored one per line in notes.
+  const instructions = (row.notes ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  // Older contracts stored "Topic: answer" lines as the ranking when there were no priorities.
+  const ranked = ((row.ranked_priorities as string[] | null) ?? []).filter(
+    (r) => !answers.some((d) => r === `${d.topic}: ${d.answer}`),
   );
-  const instructions = (row.added_by_human as string[] | null) ?? [];
+  const added = (row.added_by_human as string[] | null) ?? [];
+  const removed = (row.removed_by_human as string[] | null) ?? [];
   const lines = Object.entries(hardLines)
     .filter(([, on]) => on)
     .map(([k]) =>
@@ -102,6 +136,9 @@ export function toContract(row: ContractRow): Contract {
     );
   return {
     review_id: row.review_id,
+    ranked_priorities: ranked,
+    added_priorities: added,
+    removed_priorities: removed,
     decisions,
     instructions_from_human: instructions,
     plan_guidance: row.plan_guidance ?? "",
@@ -109,7 +146,11 @@ export function toContract(row: ContractRow): Contract {
     budget_cents: row.budget_cents,
     dials: row.dials as Dials,
     instructions: CONTRACT_INSTRUCTIONS,
-    message: `${describeDecisions(row.decisions as DecisionAnswer[], instructions)}${row.notes ? ` Note: ${row.notes}` : ""}`,
+    message: describeDecisions(answers, instructions, {
+      ranked,
+      added,
+      removed,
+    }),
   };
 }
 

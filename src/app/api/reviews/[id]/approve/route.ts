@@ -22,8 +22,8 @@ export const maxDuration = 60;
 const nonEmpty = (v: unknown) =>
   v && typeof v === "object" && Object.keys(v).length > 0;
 
-// POST /api/reviews/:id/approve — the human's decisions (plus any typed instructions in
-// added_by_human) become the contract.
+// POST /api/reviews/:id/approve — the human's ranked priorities (added/removed), decisions
+// and typed instructions become the contract.
 // Only the ranking is required; dials, hard lines and budget come from the request,
 // else the human's saved profile, else defaults.
 export async function POST(
@@ -36,11 +36,9 @@ export async function POST(
     const { id } = await params;
     const approval = await readJson(request, ApprovalSchema);
     // Decisions (current pop-up) or a plain ranking (older clients).
-    const ranked =
-      approval.ranked_priorities ??
-      approval.decisions?.map((d) => `${d.topic}: ${d.answer}`) ??
-      [];
-    if (!ranked.length) throw new HttpError(400, "Send at least one decision.");
+    const ranked = approval.ranked_priorities ?? [];
+    if (!ranked.length && !approval.decisions?.length)
+      throw new HttpError(400, "Send at least one priority or decision.");
 
     // RLS: these selects only succeed for the owner.
     const [{ data: review, error }, { data: profile }] = await Promise.all([
@@ -88,7 +86,12 @@ export async function POST(
         p_hard_lines: resolved.hard_lines as Json,
         p_budget_cents: resolved.budget_cents,
         p_plan_guidance: guidance,
-        p_notes: resolved.notes ?? null,
+        // Typed instructions, one per line (read back as instructions_from_human).
+        p_notes:
+          [
+            ...(resolved.instructions ?? []),
+            ...(resolved.notes ? [resolved.notes] : []),
+          ].join("\n") || null,
         p_added_by_human: (resolved.added_by_human ?? []) as Json,
         p_removed_by_human: (resolved.removed_by_human ?? []) as Json,
         p_decisions: (resolved.decisions ?? []) as Json,

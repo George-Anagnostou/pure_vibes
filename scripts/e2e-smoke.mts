@@ -175,7 +175,7 @@ try {
           changed: false,
         },
       ],
-      added_by_human: ["Say which answers you weren't sure about"],
+      instructions: ["Say which answers you weren't sure about"],
     }),
   });
   const ap = await apRes.json();

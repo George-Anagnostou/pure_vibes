@@ -5,6 +5,29 @@ export const HOSPITAL_PLAN = {
   agent_name: "Claude Code",
   task: "Build me a tracker that tracks medical prices at different hospitals in San Francisco so I can see what is the cheapest.",
   plan: "Hospitals must publish machine-readable price files under the CMS price transparency rule. I'll pull those files for every SF hospital, normalize them into one database, and build a search page that ranks hospitals by price for each procedure.",
+  priorities: [
+    {
+      name: "Completeness",
+      why: "Cover every SF hospital so the cheapest is never missed",
+      source: "assumption",
+    },
+    {
+      name: "Accuracy",
+      why: "Use real published prices, no estimates",
+      source: "rules",
+    },
+    {
+      name: "Always up to date",
+      why: "A tracker should refresh itself",
+      source: "judgment",
+    },
+    {
+      name: "Finish in one pass",
+      why: "Deliver the whole tool without interrupting you",
+      source: "judgment",
+    },
+    { name: "Low cost", why: "Avoid paid data sources", source: "judgment" },
+  ],
   decisions: [
     {
       topic: "Scope",

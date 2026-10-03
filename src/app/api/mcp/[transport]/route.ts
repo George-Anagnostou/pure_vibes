@@ -1,5 +1,5 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { DecisionSchema } from "@/lib/glassbox/types";
+import { DecisionSchema, StatedPrioritySchema } from "@/lib/glassbox/types";
 import { z } from "zod";
 import { requireAgent } from "@/lib/glassbox/agent-auth";
 import { runCheckpoint } from "@/lib/glassbox/checkpoint";
@@ -68,7 +68,7 @@ function contractPayload(lookup: ContractLookup) {
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Glass Box interview: before you act, show the human how you're approaching the task and the decisions you're about to make on their behalf, so they can correct what you THINK they want. Call this BEFORE acting on any task with real choices (scope, data sources, cost, time, quality, risk), and again when a new significant decision comes up. Give `approach`: 2-4 sentences on how you're thinking about the problem. Then 4-10 `decisions`: the judgment calls you'd otherwise make silently, e.g. 'How many hospitals do I scan? → All 20', 'Where do prices come from? → hospital price-transparency files', 'Proof of concept or full build?'. For each: your choice, what you think the human wants that led to it, how you weighed it, 1-3 real alternatives with trade-offs, your estimate of tokens / dollars / time for your choice, and its source (request / instructions / rules / judgment / assumption). Be candid about guesses. A pop-up opens for the human, who keeps or changes each decision and can add instructions. Then call get_contract until approved. Its `decisions` are binding: do what each `decision` says (especially changed_by_human ones), follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
+  "Glass Box interview: before you act, show the human how you're approaching the task and the decisions you're about to make on their behalf, so they can correct what you THINK they want. Call this BEFORE acting on any task with real choices (scope, data sources, cost, time, quality, risk), and again when a new significant decision comes up. Give `approach`: 2-4 sentences on how you're thinking about the problem. Give `priorities`: 4-10 things you're weighing when trade-offs come up, ranked highest first (e.g. Completeness, Speed, Cost, Accuracy, Privacy), each with a why and source. Then 4-10 `decisions`: the judgment calls you'd otherwise make silently, e.g. 'How many hospitals do I scan? → All 20', 'Where do prices come from? → hospital price-transparency files', 'Proof of concept or full build?'. For each: your choice, what you think the human wants that led to it, how you weighed it, 1-3 real alternatives with trade-offs, your estimate of tokens / dollars / time for your choice, and its source (request / instructions / rules / judgment / assumption). Be candid about guesses. A pop-up opens for the human, who re-ranks, deletes and adds priorities, keeps or changes each decision, and can add instructions. Then call get_contract until approved. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each `decision` says (especially changed_by_human ones), follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
 
 const handler = createMcpHandler(
   (server) => {
@@ -92,6 +92,13 @@ const handler = createMcpHandler(
             .describe(
               "2-4 sentences: how you're thinking about approaching the problem",
             ),
+          priorities: z
+            .array(StatedPrioritySchema)
+            .min(1)
+            .max(12)
+            .describe(
+              "4-10 things you're weighing, highest first, each with why and source",
+            ),
           decisions: z
             .array(DecisionSchema)
             .min(1)
@@ -102,7 +109,7 @@ const handler = createMcpHandler(
           agent_name: z.string().trim().min(1).max(100).optional(),
         }),
       },
-      async ({ task, approach, decisions, agent_name }, ctx) => {
+      async ({ task, approach, priorities, decisions, agent_name }, ctx) => {
         const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
@@ -111,6 +118,7 @@ const handler = createMcpHandler(
             agentName: agent_name ?? agent.agentName,
             task,
             plan: approach,
+            priorities,
             decisions,
           });
           const lookup = await waitForContract(
@@ -244,7 +252,7 @@ const handler = createMcpHandler(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, and the decisions you're making on my behalf (your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, what you're weighing (ranked), and the decisions you're making on my behalf (your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
             },
           },
         ],

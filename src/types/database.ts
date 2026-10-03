@@ -17,7 +17,7 @@ export type ProfileRow = { user_id: string; dials: Json; hard_lines: Json; ranke
 export type AgentKeyRow = { id: string; user_id: string; name: string; key_hash: string; created_at: string; last_used_at: string | null };
 export type ReviewRow = {
   id: string; user_id: string; agent_name: string; task: string; plan: string;
-  stated: Json; revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
+  stated: Json; priorities: Json; revealed: Json | null; critique: Json | null; status: string; created_at: string; decided_at: string | null;
 };
 export type ContractRow = {
   id: string; review_id: string; user_id: string; ranked_priorities: Json; dials: Json; hard_lines: Json;

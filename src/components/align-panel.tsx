@@ -4,8 +4,16 @@ import { useMemo, useState } from "react";
 import {
   readDecisions,
   readDecisionSuggestions,
+  readPrioritySuggestions,
+  readStated,
+  samePriority,
   type AlignReview,
 } from "@/components/align-data";
+import {
+  PriorityBoard,
+  type Board,
+  type BoardItem,
+} from "@/components/priority-board";
 import {
   answerFor,
   buildCards,
@@ -19,7 +27,12 @@ export type FinalDecision = { topic: string; answer: string; changed: boolean };
 type Phase =
   | { kind: "editing" }
   | { kind: "busy"; action: "send" | "reject" }
-  | { kind: "sent"; decisions: FinalDecision[]; instructions: string[] }
+  | {
+      kind: "sent";
+      decisions: FinalDecision[];
+      instructions: string[];
+      priorities: string[];
+    }
   | { kind: "rejected" };
 
 async function post(path: string, body: unknown) {
@@ -36,6 +49,50 @@ async function post(path: string, body: unknown) {
 
 const same = (a: string, b: string) =>
   a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const HINT = {
+  drop_priority: "Maybe drop",
+  raise_priority: "Maybe higher",
+  lower_priority: "Maybe lower",
+} as const;
+
+// The agent's ranked priorities (with Glass Box's nudges as hints) on the left;
+// priorities Glass Box thinks are missing in "also consider".
+function initialBoard(review: AlignReview): Board {
+  const suggestions = readPrioritySuggestions(review.critique);
+  const ranked: BoardItem[] = readStated(review.priorities).map((p, i) => {
+    const nudge = suggestions.find(
+      (s) =>
+        s.action !== "add_priority" &&
+        (s.ref === i + 1 || samePriority(s.name, p.name)),
+    );
+    return {
+      id: `agent:${p.name}`,
+      name: p.name,
+      detail: p.why || undefined,
+      source: p.source,
+      origin: "agent",
+      hint:
+        nudge && nudge.action !== "add_priority"
+          ? `${HINT[nudge.action]}${nudge.why ? `: ${nudge.why}` : ""}`
+          : undefined,
+    };
+  });
+  const pool: BoardItem[] = suggestions
+    .filter(
+      (s) =>
+        s.action === "add_priority" &&
+        !ranked.some((r) => samePriority(r.name, s.name)),
+    )
+    .map((s) => ({
+      id: `suggested:${s.name}`,
+      name: s.name,
+      detail: s.why || undefined,
+      source: "Glass Box",
+      origin: "suggested",
+    }));
+  return { ranked, pool };
+}
 
 // The whole review in one screen: how the agent is approaching the task, the
 // decisions it's making for you (keep, switch, or say what you want), anything else
@@ -55,7 +112,55 @@ export function AlignPanel({
       ),
     [review.stated, review.critique],
   );
+  const [board, setBoard] = useState<Board>(() => initialBoard(review));
+  const [deleted, setDeleted] = useState<BoardItem[]>([]);
+  const [initialOrder] = useState(() =>
+    board.ranked.map((i) => i.id).join("|"),
+  );
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
+
+  function deletePriority(item: BoardItem) {
+    setBoard((b) => ({
+      ranked: b.ranked.filter((i) => i.id !== item.id),
+      pool: b.pool.filter((i) => i.id !== item.id),
+    }));
+    if (item.origin === "agent") setDeleted((d) => [...d, item]);
+  }
+
+  function addPriority(name: string) {
+    setBoard((b) =>
+      [...b.ranked, ...b.pool].some((i) => samePriority(i.name, name))
+        ? b
+        : {
+            ...b,
+            ranked: [
+              ...b.ranked,
+              {
+                id: `human:${name}:${Date.now()}`,
+                name,
+                source: "You",
+                origin: "human",
+              },
+            ],
+          },
+    );
+  }
+
+  const addedPriorities = board.ranked
+    .filter((i) => i.origin !== "agent")
+    .map((i) => i.name);
+  const removedPriorities = [...board.pool, ...deleted]
+    .filter((i) => i.origin === "agent")
+    .map((i) => i.name);
+  const reordered =
+    board.ranked
+      .filter((i) => i.origin === "agent")
+      .map((i) => i.id)
+      .join("|") !==
+    initialOrder
+      .split("|")
+      .filter((id) => board.ranked.some((r) => r.id === id))
+      .join("|");
   const [instructions, setInstructions] = useState<string[]>([]);
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [error, setError] = useState("");
@@ -68,11 +173,19 @@ export function AlignPanel({
     return [{ card, answer, changed }];
   });
   const changes =
-    finalDecisions.filter((d) => d.changed).length + instructions.length;
+    finalDecisions.filter((d) => d.changed).length +
+    instructions.length +
+    addedPriorities.length +
+    removedPriorities.length +
+    (reordered ? 1 : 0);
 
   async function send() {
-    if (!finalDecisions.length && !instructions.length) {
-      setError("Answer at least one decision.");
+    if (
+      !finalDecisions.length &&
+      !instructions.length &&
+      !board.ranked.length
+    ) {
+      setError("Keep at least one priority or decision.");
       return;
     }
     setError("");
@@ -86,10 +199,14 @@ export function AlignPanel({
           ...(card.agentChoice ? { agent_choice: card.agentChoice } : {}),
           changed,
         })),
-        ...(finalDecisions.length
-          ? {}
-          : { ranked_priorities: ["Follow the human's instructions"] }),
-        added_by_human: instructions,
+        ...(board.ranked.length
+          ? { ranked_priorities: board.ranked.map((i) => i.name) }
+          : finalDecisions.length
+            ? {}
+            : { ranked_priorities: ["Follow the human's instructions"] }),
+        added_by_human: addedPriorities,
+        removed_by_human: removedPriorities,
+        instructions,
       });
       setPhase({
         kind: "sent",
@@ -99,6 +216,7 @@ export function AlignPanel({
           changed,
         })),
         instructions,
+        priorities: board.ranked.map((i) => i.name),
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not send.");
@@ -129,6 +247,16 @@ export function AlignPanel({
                 {review.agent_name} will follow your decisions.
               </p>
             </div>
+            {phase.priorities.length > 0 && (
+              <p className="text-[14px]">
+                <span className="text-[11px] font-bold tracking-wide text-ink-soft uppercase">
+                  Priorities
+                </span>
+                <span className="block font-semibold">
+                  {phase.priorities.join(" > ")}
+                </span>
+              </p>
+            )}
             <FinalDecisions
               decisions={phase.decisions}
               instructions={phase.instructions}
@@ -189,6 +317,27 @@ export function AlignPanel({
             How it&apos;s approaching this
           </h2>
           <p className="mt-1 text-[14px] leading-snug">{approach}</p>
+        </section>
+      )}
+
+      {(board.ranked.length > 0 || board.pool.length > 0) && (
+        <section aria-labelledby={`pri-${review.id}`}>
+          <h2
+            id={`pri-${review.id}`}
+            className="text-[11px] font-bold tracking-wide text-ink-soft uppercase"
+          >
+            What it&apos;s weighing, ranked
+          </h2>
+          <p className="mt-0.5 mb-2 text-[13px] text-ink-soft">
+            Drag to re-rank (top wins when they conflict), pull in Glass
+            Box&apos;s suggestions, ✕ to delete, or add your own.
+          </p>
+          <PriorityBoard
+            board={board}
+            onChange={setBoard}
+            onDelete={deletePriority}
+            onAdd={addPriority}
+          />
         </section>
       )}
 

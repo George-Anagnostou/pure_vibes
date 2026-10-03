@@ -223,14 +223,23 @@ export type Decision = z.infer<typeof DecisionSchema>;
 // ---- Suggestions: Glass Box's advice on the decisions (the only critique the human sees) ----
 export const SuggestionSchema = z.object({
   action: z
-    .enum(["challenge", "add"])
+    .enum([
+      "challenge",
+      "add",
+      "add_priority",
+      "drop_priority",
+      "raise_priority",
+      "lower_priority",
+    ])
     .describe(
-      "challenge = the agent's choice on an existing decision is likely wrong for this person; add = a decision the agent is making implicitly and didn't list",
+      "Decisions: challenge = the agent's choice on an existing decision is likely wrong for this person; add = a decision the agent is making implicitly and didn't list. Priorities: add_priority = something this person likely cares about that the agent isn't weighing; drop/raise/lower_priority = an agent priority that should go, or be ranked higher/lower",
     ),
   ref: z
     .number()
     .int()
-    .describe("For challenge: the decision's number (1 = first). For add: 0."),
+    .describe(
+      "challenge: the decision's number (1 = first). drop/raise/lower_priority: the priority's number. add / add_priority: 0.",
+    ),
   topic: z
     .string()
     .describe(
@@ -301,6 +310,9 @@ export type ContractDecision = {
 
 export type Contract = {
   review_id: string;
+  ranked_priorities: string[]; // what to weigh, in the human's order (highest first)
+  added_priorities: string[]; // priorities the human added
+  removed_priorities: string[]; // agent priorities the human deleted: don't optimize for these
   decisions: ContractDecision[];
   instructions_from_human: string[]; // free-text steps/instructions the human typed
   plan_guidance: string;
@@ -325,6 +337,7 @@ export type DecisionAnswer = z.infer<typeof DecisionAnswerSchema>;
 
 export const ApprovalSchema = z.object({
   decisions: z.array(DecisionAnswerSchema).max(20).optional(),
+  instructions: z.array(z.string().trim().min(1).max(300)).max(20).optional(),
   ranked_priorities: z
     .array(z.string().trim().min(1).max(300))
     .min(1)

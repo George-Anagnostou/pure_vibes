@@ -10,6 +10,7 @@ import {
   type Approval,
   type Critique,
   type Decision,
+  type StatedPriority,
   type Suggestion,
   type Revealed,
 } from "@/lib/glassbox/types";
@@ -56,12 +57,14 @@ Estimate where the plan sits on each dial (0 = left label, 1 = right label):
 Estimate realistic monthly and one-time USD cost of running the plan as written.
 The headline is one plain-English sentence a non-engineer would understand.`;
 
-const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed about how it is approaching the task and the DECISIONS it is making on the human's behalf. For each numbered decision you see: the question, the agent's choice, what it thinks the human wants, its reasoning, the alternatives it considered with trade-offs, its estimate of tokens/cost/time, and a source (request = the human said so; instructions; rules; judgment = the agent's default; assumption = it guessed). The task can be anything: research, data pulls, building software, booking, buying.
+const CRITIQUE_SYSTEM = `${OVERSIGHT_ROLE}You are a skeptical advisor to the HUMAN, with no stake in the agent finishing. The agent was interviewed about how it is approaching the task: its ranked PRIORITIES (what it is weighing when trade-offs come up, highest first) and the DECISIONS it is making on the human's behalf. For each numbered decision you see: the question, the agent's choice, what it thinks the human wants, its reasoning, the alternatives it considered with trade-offs, its estimate of tokens/cost/time, and a source (request = the human said so; instructions; rules; judgment = the agent's default; assumption = it guessed). The task can be anything: research, data pulls, building software, booking, buying.
 
 Your job is to find where the agent's picture of what this person wants is probably wrong, and decisions it is making without realizing.
 1. suggestions (2-5, most important first):
    - "challenge": an existing decision where this person would likely choose differently. Typical: overreaching scope when a proof of concept would do; slow/expensive choices with no evidence the person wants that; unreliable or unofficial data sources; guesses (source = assumption/judgment) the person should confirm. Set ref to the decision's number, copy its topic and question, put your recommended option in "recommend" (prefer one of the agent's alternatives, word for word; otherwise add it to options).
    - "add": a consequential decision the agent is making implicitly and didn't list (e.g. which data source, how to handle missing data, whether to ask before spending, who sees personal data). ref = 0; give a topic, the question, 2-3 options with trade-offs (include the agent's likely default), and your recommendation.
+   - Priorities: "add_priority" for something this person likely cares about that the agent isn't weighing (e.g. Price when booking, Privacy with health data, "Proof of concept first"); "drop_priority" / "raise_priority" / "lower_priority" for an agent priority that should go or move (ref = its number in the priority list, topic = its exact name). For add_priority, ref = 0 and topic is the new priority's short name; recommend = the same name; options = [].
+   Give 1-3 priority suggestions and 1-3 decision suggestions.
    Write "why" as one short, concrete sentence to the human about THEIR situation. Never challenge a decision whose choice already matches your recommendation.
 2. Flag any decision or step that could cross a hard line: no_unauthorized_access (logging in without permission, guessing credentials, forging sessions, scraping behind auth), no_deception (misrepresenting work or identity), no_unapproved_contact (emailing/messaging people), budget_cap (spending meaningful money without asking). Severity "block" only for clear violations, "warn" for risky-but-ambiguous. Only real crossings; name the decision. If a hard line is at risk, include a suggestion that addresses it.
 3. stated_vs_revealed: one line, "Agent thinks you want: <its read>. You probably want: <your read>."
@@ -69,7 +72,12 @@ Verdict: red only with a block-severity risk; yellow if the agent's read of what
 Be concise and concrete.`;
 
 // stated holds the agent's decisions (older rows: steps or priorities, same name field).
-type Input = { task: string; plan?: string; stated?: Decision[] };
+type Input = {
+  task: string;
+  plan?: string;
+  stated?: Decision[];
+  priorities?: StatedPriority[];
+};
 
 const quote = ({ task, plan }: Input) =>
   `<task>\n${task}\n</task>\n\n<proposed_plan>\n${plan?.trim() || "(The agent gave no step-by-step plan; judge from the task and its priorities.)"}\n</proposed_plan>`;
@@ -104,6 +112,17 @@ const listStated = (decisions: Decision[] = []) =>
         .join("\n")
     : "(no decisions stated)";
 
+// What the agent says it is weighing, highest first.
+const listPriorities = (priorities: StatedPriority[] = []) =>
+  priorities.length
+    ? priorities
+        .map(
+          (p, i) =>
+            `${i + 1}. ${p.name}${p.source ? ` [${p.source}]` : ""}${p.why ? ` — ${p.why}` : ""}`,
+        )
+        .join("\n")
+    : "(none stated)";
+
 // Retry once on the fallback model when the primary refuses or returns unparseable output.
 async function withFallback<T>(
   label: string,
@@ -120,12 +139,17 @@ async function withFallback<T>(
   }
 }
 
-export async function reveal({ task, plan, stated }: Input): Promise<Revealed> {
+export async function reveal({
+  task,
+  plan,
+  stated,
+  priorities,
+}: Input): Promise<Revealed> {
   return withFallback("reveal", async (m) => {
     const { output } = await generateText({
       model: m,
       system: REVEAL_SYSTEM,
-      prompt: `${quote({ task, plan })}\n\nAGENT'S DECISIONS:\n${listStated(stated)}\n\nReveal what this approach is really optimizing for, judging the choices it makes.`,
+      prompt: `${quote({ task, plan })}\n\nAGENT'S PRIORITIES (ranked):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS:\n${listStated(stated)}\n\nReveal what this approach is really optimizing for, judging the choices it makes.`,
       output: Output.object({
         schema: RevealSchema,
         name: "revealed_priorities",
@@ -155,44 +179,77 @@ function matchDecision(sg: Suggestion, decisions: Decision[]) {
 export function sanitizeSuggestions(
   suggestions: Critique["suggestions"],
   decisions: Decision[] = [],
+  priorities: StatedPriority[] = [],
 ) {
   const seen = new Set<string>();
   const out: Critique["suggestions"] = [];
+  const priorityAt = (sg: Suggestion) => {
+    if (sg.ref >= 1 && sg.ref <= priorities.length) return sg.ref - 1;
+    const t = words(sg.topic);
+    return t ? priorities.findIndex((p) => words(p.name) === t) : -1;
+  };
   for (const sg of suggestions) {
-    const at = matchDecision(sg, decisions);
     if (sg.action === "challenge") {
+      const at = matchDecision(sg, decisions);
       if (at === -1) continue;
       const d = decisions[at];
       if (!sg.recommend.trim() || words(sg.recommend) === words(d.choice))
         continue;
-      const key = words(d.topic);
+      const key = `d:${words(d.topic)}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({ ...sg, ref: at + 1, topic: d.topic, question: d.question });
-    } else {
-      const key = words(sg.topic);
-      if (!key || at !== -1 || seen.has(key) || !sg.recommend.trim()) continue;
+    } else if (sg.action === "add") {
+      const key = `d:${words(sg.topic)}`;
+      if (
+        !words(sg.topic) ||
+        matchDecision(sg, decisions) !== -1 ||
+        seen.has(key) ||
+        !sg.recommend.trim()
+      )
+        continue;
       seen.add(key);
       out.push({ ...sg, ref: 0 });
+    } else if (sg.action === "add_priority") {
+      const name = sg.topic.trim() || sg.recommend.trim();
+      const key = `p:${words(name)}`;
+      if (
+        !words(name) ||
+        priorities.some((p) => words(p.name) === words(name)) ||
+        seen.has(key)
+      )
+        continue;
+      seen.add(key);
+      out.push({ ...sg, ref: 0, topic: name });
+    } else {
+      const at = priorityAt(sg);
+      if (at === -1) continue;
+      if (sg.action === "raise_priority" && at === 0) continue;
+      if (sg.action === "lower_priority" && at === priorities.length - 1)
+        continue;
+      const key = `p:${words(priorities[at].name)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ ...sg, ref: at + 1, topic: priorities[at].name });
     }
   }
   return out;
 }
 
 export async function critique(
-  { task, plan, stated = [] }: Input,
+  { task, plan, stated = [], priorities = [] }: Input,
   revealed: Revealed,
 ): Promise<Critique> {
   return withFallback("critique", async (m) => {
     const { output } = await generateText({
       model: m,
       system: CRITIQUE_SYSTEM,
-      prompt: `${quote({ task, plan })}\n\nAGENT'S APPROACH AND DECISIONS (from interviewing it):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims; context only, do not use these names for drop/raise/lower):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
+      prompt: `${quote({ task, plan })}\n\nAGENT'S PRIORITIES — what it is weighing, ranked (from interviewing it):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS (from interviewing it):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims; context only, do not use these names for drop/raise/lower):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
       output: Output.object({ schema: CritiqueSchema, name: "critique" }),
     });
     return {
       ...output,
-      suggestions: sanitizeSuggestions(output.suggestions, stated),
+      suggestions: sanitizeSuggestions(output.suggestions, stated, priorities),
     };
   });
 }
@@ -281,6 +338,9 @@ export async function planGuidance(
     .filter(([, on]) => on)
     .map(([k]) => HARD_LINES[k as keyof typeof HARD_LINES] ?? k)
     .join("; ");
+  const prioritiesText = approval.ranked_priorities?.length
+    ? `THE HUMAN'S PRIORITIES (ranked, first wins):\n${approval.ranked_priorities.map((p, i) => `${i + 1}. ${p}`).join("\n")}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nRemoved by the human (don't optimize for these): ${approval.removed_by_human.join(", ")}` : ""}\n\n`
+    : "";
   const decided = approval.decisions?.length
     ? `THE HUMAN'S DECISIONS:\n${approval.decisions
         .map(
@@ -288,7 +348,7 @@ export async function planGuidance(
             `- ${d.topic}: ${d.answer}${d.changed ? ` (CHANGED by the human${d.agent_choice ? `; the agent had chosen: ${d.agent_choice}` : "; the agent hadn't considered this"})` : " (agent's choice kept)"}`,
         )
         .join("\n")}`
-    : `HUMAN-APPROVED STEPS (in order):\n${(approval.ranked_priorities ?? []).map((p, i) => `${i + 1}. ${p}`).join("\n")}`;
+    : "";
   try {
     const { text } = await withFallback("plan guidance", (m) =>
       generateText({
@@ -297,7 +357,7 @@ export async function planGuidance(
         system:
           OVERSIGHT_ROLE +
           "You tell an AI agent how to proceed now that the human has corrected the decisions it was about to make on their behalf. Output 2-4 short imperative sentences the agent must follow, leading with what the human CHANGED: what to do differently, what not to do, what to show or check with the human. Be concrete to the task. No preamble.",
-        prompt: `${quote({ task, plan })}\n\n${decided}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nRemoved by the human: ${approval.removed_by_human.join(", ")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
+        prompt: `${quote({ task, plan })}\n\n${prioritiesText}${decided}${approval.instructions?.length ? `\n\nTHE HUMAN ALSO SAID:\n${approval.instructions.map((t) => `- ${t}`).join("\n")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
       }),
     );
     return text.trim();
