@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { StarterConsole } from "@/components/starter-console";
+import { DeveloperConsole } from "@/components/developer-console";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +39,12 @@ export default async function Home({
   }
   return (
     <main>
-      <h1>Pure Vibes</h1>
+      <h1>GlassBox</h1>
       <p className="muted">
-        Your team’s integration starter. Sign in, test an AI workflow, and
-        connect billing. Build your product from here.
+        GlassBox makes agent work visible so people can understand, guide, and
+        align with AI. This developer console currently exercises the shared
+        auth, workflow, and billing foundation; product visualizations are in
+        development.
       </p>
       {!configured && (
         <div className="notice">
@@ -77,7 +79,11 @@ export default async function Home({
           Checkout was cancelled. You can try again below.
         </p>
       )}
-      <StarterConsole configured={configured} email={email} billing={billing} />
+      <DeveloperConsole
+        configured={configured}
+        email={email}
+        billing={billing}
+      />
       <section>
         <h2>Team handoff</h2>
         <p>

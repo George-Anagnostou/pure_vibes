@@ -1,5 +1,11 @@
 # Architecture
 
+## GlassBox team boundaries
+
+This project makes AI agent work legible so people can understand, guide, and align with it. It is maintained in the canonical repository, `George-Anagnostou/pure_vibes`. Read `AGENTS.md` before editing. Nick owns product direction, GlassBox agent reasoning/checkpoints/contracts, review and MCP API routes, scripts, fixtures, and Supabase migrations. Kathryn owns UI and public assets. George owns infrastructure/backend integrations, auth, Stripe, CI, deployment configuration, and internal documentation. `src/lib/glassbox/types.ts` is Nick-owned shared UI/API contract; ask him before changing it. After 3:00pm PT on hackathon day, contract changes must be additive. Cross-owner PRs must disclose touched areas and obtain the affected owner's approval before merge.
+
+Only Nick creates migrations and applies them to the shared Supabase project. Never edit an already-pushed migration; create a new one. Get explicit approval before shared or destructive database actions. Vercel deployment does not apply Supabase migrations.
+
 ## Integration map
 
 ```text
@@ -12,7 +18,7 @@ Browser → Next.js page / API routes (Vercel Node runtime)
 Stripe → signed webhook → current subscription lookup → transactional DB sync
 ```
 
-The starter page is a developer test console, not the final product UI. Environment-dependent clients initialize only when used, so CI builds succeed without secrets.
+The current page is a developer test console, not the GlassBox visualization experience. Environment-dependent clients initialize only when used, so CI builds succeed without secrets.
 
 ## Routes
 
