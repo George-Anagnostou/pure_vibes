@@ -203,6 +203,9 @@ export function toContract(row: ContractRow): Contract {
 }
 
 // The agent answers Glass Box's challenges; only then does the human see the review.
+const ALREADY_ANSWERED =
+  "Challenges were already answered. Call get_contract and wait for the human.";
+
 export async function answerChallenges(
   reviewId: string,
   userId: string,
@@ -219,6 +222,8 @@ export async function answerChallenges(
   if (!review) throw new HttpError(404, "Review not found.");
   if (review.status !== "pending")
     throw new HttpError(409, `Review is already ${review.status}.`);
+  // Answers are final: re-answering would re-open the human's pop-up mid-review.
+  if (review.answered_at) throw new HttpError(409, ALREADY_ANSWERED);
   const challenges =
     (review.critique as { challenges?: Challenge[] } | null)?.challenges ?? [];
   const known = new Set(challenges.map((c) => c.id));
@@ -231,14 +236,18 @@ export async function answerChallenges(
       400,
       `Answer every challenge. Missing: ${missing.join(", ")}.`,
     );
-  const { error: upErr } = await admin
+  const { data: updated, error: upErr } = await admin
     .from("reviews")
     .update({
       challenge_answers: valid as unknown as Json,
       answered_at: new Date().toISOString(),
     })
-    .eq("id", reviewId);
+    .eq("id", reviewId)
+    .eq("status", "pending")
+    .is("answered_at", null) // two concurrent answers: only the first wins
+    .select("id");
   if (upErr) throw upErr;
+  if (!updated?.length) throw new HttpError(409, ALREADY_ANSWERED);
 }
 
 // What the agent's answers say about its real ranking: each challenge pits two priorities;

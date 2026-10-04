@@ -1,6 +1,10 @@
 import { appUrl } from "@/lib/env";
 import { redeemInstallCode } from "@/lib/glassbox/install-codes";
-import { script } from "@/lib/install-script";
+import {
+  isCommandLineFetch,
+  notATerminalScript,
+  script,
+} from "@/lib/install-script";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,12 +20,23 @@ const sh = (body: string) =>
   });
 
 // GET /i/<code>: `curl -fsSL <site>/i/<code> | sh` installs Glass Box in the current
-// folder with a freshly minted key. Each code works once, for 15 minutes.
+// folder with a freshly minted key. Each code works once, for 15 minutes, and is only
+// redeemed by curl/wget/fetch so link previews and browsers can't burn it.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ code: string }> },
 ) {
   const { code } = await params;
+  if (!isCommandLineFetch(request.headers.get("user-agent"))) {
+    const safe = /^[A-Za-z0-9_-]{1,64}$/.test(code) ? code : "CODE";
+    return new Response(notATerminalScript(`${appUrl()}/i/${safe}`), {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex",
+      },
+    });
+  }
   let key: string | null = null;
   try {
     key = await redeemInstallCode(code);

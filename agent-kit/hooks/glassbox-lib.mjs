@@ -1,11 +1,14 @@
 // Shared helpers for the Glass Box Claude Code hooks. No dependencies: Node 18+ only.
 // Config comes from the environment (set in .claude/settings.local.json "env"):
-//   GLASSBOX_URL        e.g. https://glassbox.cards
+//   GLASSBOX_URL        e.g. https://glass-box-app.vercel.app
 //   GLASSBOX_AGENT_KEY  gb_... minted on the Glass Box dashboard
 
-export const base = (
-  process.env.GLASSBOX_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
+export const base =
+  // The hosted app (install.mjs sets GLASSBOX_URL explicitly; this is only a fallback).
+  (process.env.GLASSBOX_URL ?? "https://glass-box-app.vercel.app").replace(
+    /\/$/,
+    "",
+  );
 const key = process.env.GLASSBOX_AGENT_KEY;
 
 export async function readStdin() {
@@ -35,15 +38,30 @@ export async function api(path, init = {}) {
 // The newest review for this agent and its contract (status approved | pending | rejected | none).
 export const latestContract = () => api("/api/agent/contract");
 
+// A review left pending this long was abandoned; an approved contract this old
+// belongs to an earlier task. Neither should steer or block today's work.
+const PENDING_STALE_MS = 2 * 60 * 60 * 1000;
+const DECIDED_STALE_MS = 24 * 60 * 60 * 1000;
+export function isStale(latest, now = Date.now()) {
+  if (!latest || latest.status === "none") return false;
+  const pending = latest.status === "pending";
+  const at = Date.parse(pending ? latest.created_at : latest.decided_at);
+  if (Number.isNaN(at)) return false; // older servers send no timestamps
+  return now - at > (pending ? PENDING_STALE_MS : DECIDED_STALE_MS);
+}
+
+const NO_CONTRACT =
+  "Glass Box: before acting on a task with real choices (scope, data sources, cost, time, quality, risk), call the glassbox `align` tool with the task, your approach and your ranked priorities, and wait for the human's contract.";
+
 export function contractContext(latest) {
-  if (!latest || latest.status === "none") {
-    return "Glass Box: no priority contract yet. Before executing a multi-step plan, call the glassbox `align` tool with your task, plan and your own ranked priorities.";
+  if (!latest || latest.status === "none" || isStale(latest)) {
+    return NO_CONTRACT;
   }
   if (latest.status === "pending") {
-    return `Glass Box: the human has not yet ranked priorities for "${latest.task}". Show them ${latest.align_url} and call get_contract (review_id ${latest.review_id}) before acting.`;
+    return `Glass Box: the human has not yet reviewed your plan for "${latest.task}". If that is still the task, show them ${latest.align_url} and call get_contract (review_id ${latest.review_id}) before acting. If the human has asked for something else, call align for the new task.`;
   }
   if (latest.status !== "approved") {
-    return `Glass Box: the human ${latest.status} your last plan ("${latest.task}"). Do not execute it; call align with a revised plan.`;
+    return `Glass Box: the human ${latest.status} your last plan ("${latest.task}"). Do not execute it; call align with a revised plan, or align on the new task if the human has asked for something else.`;
   }
   const c = latest.contract;
   const decisions = (c.decisions ?? []).map(
@@ -51,7 +69,7 @@ export function contractContext(latest) {
       `- ${d.topic}: ${d.decision}${d.changed_by_human ? " (changed by the human)" : ""}`,
   );
   return [
-    `Glass Box contract for "${latest.task}" (review_id ${latest.review_id}) — BINDING. The human decided:`,
+    `Glass Box contract for "${latest.task}" (review_id ${latest.review_id}). It is BINDING for that task only: if the human's current request is a different task with real choices, call align for it first. The human decided:`,
     ...decisions,
     c.instructions_from_human?.length
       ? `The human also told you: ${c.instructions_from_human.join("; ")}`

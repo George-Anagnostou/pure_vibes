@@ -72,14 +72,26 @@ const HOOKS = [
 ];
 const hookSources = await Promise.all(HOOKS.map((f) => kitFile(`hooks/${f}`)));
 const section = await kitFile("CLAUDE.glassbox.md");
-const readJson = (p) =>
-  existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
+const readJson = (p) => {
+  if (!existsSync(p)) return {};
+  try {
+    const value = JSON.parse(readFileSync(p, "utf8"));
+    if (value && typeof value === "object" && !Array.isArray(value))
+      return value;
+  } catch {
+    // reported below
+  }
+  console.error(`${p} is not a JSON object. Fix or move it, then rerun.`);
+  process.exit(1);
+};
 const writeJson = (p, v) => writeFileSync(p, `${JSON.stringify(v, null, 2)}\n`);
+const mcpPath = join(dir, ".mcp.json");
+const mcp = readJson(mcpPath);
+const settingsPath = join(dir, ".claude/settings.local.json");
+const settings = readJson(settingsPath);
 mkdirSync(join(dir, ".claude/hooks/glassbox"), { recursive: true });
 
 // 1. MCP server
-const mcpPath = join(dir, ".mcp.json");
-const mcp = readJson(mcpPath);
 mcp.mcpServers = {
   ...mcp.mcpServers,
   glassbox: {
@@ -99,8 +111,6 @@ const hook = (file, timeout) => ({
   command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/glassbox/${file}"`,
   timeout,
 });
-const settingsPath = join(dir, ".claude/settings.local.json");
-const settings = readJson(settingsPath);
 // MCP_TOOL_TIMEOUT: the server answers within ~45s, but give slow networks headroom.
 settings.env = {
   ...settings.env,
@@ -108,26 +118,41 @@ settings.env = {
   GLASSBOX_AGENT_KEY: key,
   MCP_TOOL_TIMEOUT: "120000",
 };
-settings.enableAllProjectMcpServers = true;
-settings.hooks = {
-  ...settings.hooks,
-  SessionStart: [
-    {
-      matcher: "startup|resume|compact",
-      hooks: [hook("glassbox-context.mjs", 10)],
-    },
-  ],
-  UserPromptSubmit: [{ hooks: [hook("glassbox-context.mjs", 10)] }],
-  PreToolUse: [
-    { matcher: "Bash|WebFetch", hooks: [hook("glassbox-guard.mjs", 15)] },
-  ],
-  PostToolUse: [
-    {
-      matcher: "mcp__glassbox__align|mcp__glassbox__answer_challenges",
-      hooks: [hook("glassbox-popup.mjs", 10)],
-    },
-  ],
+// Pre-approve only the glassbox server from .mcp.json, not every server in it.
+const enabled = Array.isArray(settings.enabledMcpjsonServers)
+  ? settings.enabledMcpjsonServers
+  : [];
+settings.enabledMcpjsonServers = [
+  ...enabled.filter((s) => s !== "glassbox"),
+  "glassbox",
+];
+// Keep the human's own hooks; replace only entries from an earlier install.
+const ours = {
+  SessionStart: {
+    matcher: "startup|resume|compact",
+    hooks: [hook("glassbox-context.mjs", 10)],
+  },
+  UserPromptSubmit: { hooks: [hook("glassbox-context.mjs", 10)] },
+  PreToolUse: {
+    matcher: "Bash|WebFetch",
+    hooks: [hook("glassbox-guard.mjs", 15)],
+  },
+  PostToolUse: {
+    matcher: "mcp__glassbox__align|mcp__glassbox__answer_challenges",
+    hooks: [hook("glassbox-popup.mjs", 10)],
+  },
 };
+const isOurs = (entry) =>
+  entry?.hooks?.some?.((h) =>
+    String(h?.command ?? "").includes(".claude/hooks/glassbox/"),
+  );
+settings.hooks = { ...settings.hooks };
+for (const [event, entry] of Object.entries(ours)) {
+  const existing = Array.isArray(settings.hooks[event])
+    ? settings.hooks[event]
+    : [];
+  settings.hooks[event] = [...existing.filter((e) => !isOurs(e)), entry];
+}
 writeJson(settingsPath, settings);
 
 // 3. CLAUDE.md: add the Glass Box section, or replace an older copy of it in place
@@ -160,7 +185,8 @@ if (missing.length)
   );
 
 console.log(`Glass Box connected in ${dir}
-  MCP:   ${url}/api/mcp/mcp  (tools: align, get_contract, checkpoint, request_spend; prompt /mcp__glassbox__align)
+  MCP:   ${url}/api/mcp/mcp  (tools: align, answer_challenges, get_contract, checkpoint, request_spend;
+         prompt /mcp__glassbox__align)
   Hooks: SessionStart + UserPromptSubmit (contract re-injection), PreToolUse Bash|WebFetch (checkpoint guard),
-         PostToolUse align (opens the pop-up window for the human)
+         PostToolUse align/answer_challenges (opens the pop-up window for the human)
 Start Claude Code in that directory and run /mcp to confirm "glassbox" is connected.`);

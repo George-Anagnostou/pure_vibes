@@ -3,11 +3,17 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import { generateText, Output, type LanguageModel } from "ai";
 import {
+  buildGuidancePrompt,
+  fallbackGuidance,
+  GUIDANCE_SYSTEM,
+  NO_CHANGES_GUIDANCE,
+  type GuidanceOptions,
+  type ResolvedApproval,
+} from "@/lib/glassbox/guidance";
+import {
+  CHALLENGE_SCENARIO_MAX,
   CritiqueSchema,
-  DIALS,
-  HARD_LINES,
   RevealSchema,
-  type Approval,
   type Critique,
   type Decision,
   type StatedPriority,
@@ -125,40 +131,53 @@ const listPriorities = (priorities: StatedPriority[] = []) =>
         .join("\n")
     : "(none stated)";
 
-// Retry once on the fallback model when the primary refuses or returns unparseable output.
+// Each model call gets its own timeout; the fallback gets a fresh one, but never past
+// the caller's overall deadline (so route handlers stay under maxDuration).
+export const CALL_TIMEOUT_MS = 20_000;
+const MIN_FALLBACK_MS = 3_000;
+
+// Retry once on the fallback model when the primary refuses, times out or returns
+// unparseable output.
 async function withFallback<T>(
   label: string,
-  run: (m: ReturnType<typeof model>) => Promise<T>,
+  run: (m: ReturnType<typeof model>, abortSignal: AbortSignal) => Promise<T>,
+  deadline = Date.now() + 2 * CALL_TIMEOUT_MS,
 ): Promise<T> {
+  const budget = () =>
+    Math.max(1, Math.min(CALL_TIMEOUT_MS, deadline - Date.now()));
   try {
-    return await run(model());
+    return await run(model(), AbortSignal.timeout(budget()));
   } catch (e) {
+    if (deadline - Date.now() < MIN_FALLBACK_MS) throw e;
     console.warn(
       `[glassbox] ${label} failed on primary model, retrying on fallback:`,
       e instanceof Error ? e.message : e,
     );
-    return run(fallbackModel());
+    return run(fallbackModel(), AbortSignal.timeout(budget()));
   }
 }
 
-export async function reveal({
-  task,
-  plan,
-  stated,
-  priorities,
-}: Input): Promise<Revealed> {
-  return withFallback("reveal", async (m) => {
-    const { output } = await generateText({
-      model: m,
-      system: REVEAL_SYSTEM,
-      prompt: `${quote({ task, plan })}\n\nAGENT'S PRIORITIES (ranked):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS:\n${listStated(stated)}\n\nReveal what this approach is really optimizing for, judging the choices it makes.`,
-      output: Output.object({
-        schema: RevealSchema,
-        name: "revealed_priorities",
-      }),
-    });
-    return output;
-  });
+export async function reveal(
+  { task, plan, stated, priorities }: Input,
+  deadline?: number,
+): Promise<Revealed> {
+  return withFallback(
+    "reveal",
+    async (m, abortSignal) => {
+      const { output } = await generateText({
+        model: m,
+        abortSignal,
+        system: REVEAL_SYSTEM,
+        prompt: `${quote({ task, plan })}\n\nAGENT'S PRIORITIES (ranked):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS:\n${listStated(stated)}\n\nReveal what this approach is really optimizing for, judging the choices it makes.`,
+        output: Output.object({
+          schema: RevealSchema,
+          name: "revealed_priorities",
+        }),
+      });
+      return output;
+    },
+    deadline,
+  );
 }
 
 // Drop suggestions that make no sense against the agent's list: raising the #1,
@@ -269,6 +288,8 @@ export function sanitizeChallenges(
       return {
         ...c,
         id: `c${i + 1}`,
+        // The ruling the human sends back must fit ChallengeRulingSchema.
+        scenario: c.scenario.trim().slice(0, CHALLENGE_SCENARIO_MAX),
         priority_numbers: tests.map(
           (t) => priorities.findIndex((p) => p.name === t) + 1,
         ),
@@ -282,33 +303,46 @@ export function sanitizeChallenges(
     });
 }
 
+// Independent of reveal (it works from the agent's own stated priorities), so the two
+// run in parallel.
 export async function critique(
   { task, understanding, plan, stated = [], priorities = [] }: Input,
-  revealed: Revealed,
+  deadline?: number,
 ): Promise<Critique> {
-  return withFallback("critique", async (m) => {
-    const { output } = await generateText({
-      model: m,
-      system: CRITIQUE_SYSTEM,
-      prompt: `${quote({ task, plan })}\n\nWHAT THE AGENT THINKS THE TASK IS:\n${understanding?.trim() || "(not stated)"}\n\nAGENT'S PRIORITIES — what it is weighing, ranked (from interviewing it):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS (from interviewing it):\n${listStated(stated)}\n\nREVEALED PRIORITIES (from an independent auditor that judged the steps, not the claims; context only, do not use these names for drop/raise/lower):\n${JSON.stringify(revealed, null, 2)}\n\nAdvise the human.`,
-      output: Output.object({ schema: CritiqueSchema, name: "critique" }),
-    });
-    return {
-      ...output,
-      suggestions: sanitizeSuggestions(output.suggestions, stated, priorities),
-      challenges: sanitizeChallenges(output.challenges, priorities),
-    };
-  });
+  return withFallback(
+    "critique",
+    async (m, abortSignal) => {
+      const { output } = await generateText({
+        model: m,
+        abortSignal,
+        system: CRITIQUE_SYSTEM,
+        prompt: `${quote({ task, plan })}\n\nWHAT THE AGENT THINKS THE TASK IS:\n${understanding?.trim() || "(not stated)"}\n\nAGENT'S PRIORITIES — what it is weighing, ranked (from interviewing it):\n${listPriorities(priorities)}\n\nAGENT'S DECISIONS (from interviewing it):\n${listStated(stated)}\n\nAdvise the human.`,
+        output: Output.object({ schema: CritiqueSchema, name: "critique" }),
+      });
+      return {
+        ...output,
+        suggestions: sanitizeSuggestions(
+          output.suggestions,
+          stated,
+          priorities,
+        ),
+        challenges: sanitizeChallenges(output.challenges, priorities),
+      };
+    },
+    deadline,
+  );
 }
 
-// If the auditor model refuses to even analyze the plan (safety filter), that is
-// itself the strongest possible signal: fail closed and mark the review red.
-const REFUSED_REVEAL: Revealed = {
+// If the analysis fails (refusal, timeout, outage), fail closed and mark the review red
+// so a human looks before the agent acts, but say honestly that the analysis is
+// missing, not that the plan is risky.
+export const UNAVAILABLE_REVEAL: Revealed = {
   priorities: [
     {
-      name: "Unknown — auditor refused",
+      name: "Unknown — analysis unavailable",
       kind: "core",
-      evidence: "The auditing model declined to analyze this plan.",
+      evidence:
+        "Glass Box couldn't analyze this plan right now (the model timed out, failed or declined).",
       confidence: 1,
     },
   ],
@@ -321,9 +355,9 @@ const REFUSED_REVEAL: Revealed = {
     autonomy: 0,
   },
   est_cost: { monthly_usd: 0, one_time_usd: 0, basis: "Not estimated" },
-  headline: "This plan was too risky for the auditor to analyze.",
+  headline: "Glass Box couldn't analyze this right now.",
 };
-const REFUSED_CRITIQUE: Critique = {
+export const UNAVAILABLE_CRITIQUE: Critique = {
   challenges: [],
   suggestions: [
     {
@@ -342,74 +376,65 @@ const REFUSED_CRITIQUE: Critique = {
       hard_line: "no_unauthorized_access",
       severity: "block",
       explanation:
-        "The independent auditor refused to analyze this plan. Blocked until a human reviews it.",
+        "Glass Box couldn't analyze this plan right now, so it's held for a human to review before the agent acts.",
     },
   ],
   stated_vs_revealed:
-    "The auditor could not analyze this plan, so what it optimizes for is unknown.",
+    "Glass Box couldn't analyze this right now, so what the plan optimizes for is unknown.",
   verdict: "red",
-  summary: "Auditor refused — failing closed.",
+  summary: "Glass Box couldn't analyze this right now — held for your review.",
 };
 
+// Total time reveal + critique may take (they run in parallel). Keeps align, including
+// the DB writes around it, well under the 60s maxDuration of the MCP and REST routes.
+export const ALIGN_BUDGET_MS = 40_000;
+
 export async function revealAndCritique(input: Input) {
-  try {
-    const revealed = await reveal(input);
-    const crit = await critique(input, revealed).catch((e) => {
-      console.error("[glassbox] critique failed, failing closed:", e);
-      return REFUSED_CRITIQUE;
-    });
-    return { revealed, critique: crit };
-  } catch (e) {
-    console.error("[glassbox] reveal failed, failing closed:", e);
-    return { revealed: REFUSED_REVEAL, critique: REFUSED_CRITIQUE };
+  const deadline = Date.now() + ALIGN_BUDGET_MS;
+  const [r, c] = await Promise.allSettled([
+    reveal(input, deadline),
+    critique(input, deadline),
+  ]);
+  if (r.status === "rejected") {
+    console.error("[glassbox] reveal failed, failing closed:", r.reason);
+    return { revealed: UNAVAILABLE_REVEAL, critique: UNAVAILABLE_CRITIQUE };
   }
+  if (c.status === "rejected")
+    console.error("[glassbox] critique failed, failing closed:", c.reason);
+  return {
+    revealed: r.value,
+    critique: c.status === "fulfilled" ? c.value : UNAVAILABLE_CRITIQUE,
+  };
 }
 
-// After the human re-ranks: turn their priorities into concrete instructions for the agent.
-export type ResolvedApproval = Approval &
-  Required<Pick<Approval, "dials" | "hard_lines" | "budget_cents">>;
+export type { ResolvedApproval } from "@/lib/glassbox/guidance";
 
-// Dials are only mentioned when the human actually set them (the pop-up doesn't),
-// and the budget only when the budget hard line is on.
+// After the human decides: turn what they CHANGED into concrete instructions for the
+// agent. Defaults (dials, hard lines, budget) are only mentioned when the request set
+// them, and with no changes at all there's nothing to phrase, so no model call.
 export async function planGuidance(
   { task, plan }: Input,
   approval: ResolvedApproval,
-  { dialsSet = false }: { dialsSet?: boolean } = {},
+  options: GuidanceOptions = {},
 ): Promise<string> {
-  const dials = Object.entries(approval.dials)
-    .map(([k, v]) => {
-      const d = DIALS[k as keyof typeof DIALS];
-      return `${k}: ${v.toFixed(2)} (0 = ${d.left}, 1 = ${d.right})`;
-    })
-    .join("\n");
-  const lines = Object.entries(approval.hard_lines)
-    .filter(([, on]) => on)
-    .map(([k]) => HARD_LINES[k as keyof typeof HARD_LINES] ?? k)
-    .join("; ");
-  const prioritiesText = approval.ranked_priorities?.length
-    ? `THE HUMAN'S PRIORITIES (ranked, first wins):\n${approval.ranked_priorities.map((p, i) => `${i + 1}. ${p}`).join("\n")}${approval.added_by_human?.length ? `\nAdded by the human: ${approval.added_by_human.join(", ")}` : ""}${approval.removed_by_human?.length ? `\nRemoved by the human (don't optimize for these): ${approval.removed_by_human.join(", ")}` : ""}\n\n`
-    : "";
-  const decided = approval.decisions?.length
-    ? `THE HUMAN'S DECISIONS:\n${approval.decisions
-        .map(
-          (d) =>
-            `- ${d.topic}: ${d.answer}${d.changed ? ` (CHANGED by the human${d.agent_choice ? `; the agent had chosen: ${d.agent_choice}` : "; the agent hadn't considered this"})` : " (agent's choice kept)"}`,
-        )
-        .join("\n")}`
-    : "";
+  const { changes, prompt } = buildGuidancePrompt(
+    quote({ task, plan }),
+    approval,
+    options,
+  );
+  if (!changes.length) return NO_CHANGES_GUIDANCE;
   try {
-    const { text } = await withFallback("plan guidance", (m) =>
+    const { text } = await withFallback("plan guidance", (m, abortSignal) =>
       generateText({
         model: m,
+        abortSignal,
         maxOutputTokens: 400,
-        system:
-          OVERSIGHT_ROLE +
-          "You tell an AI agent how to proceed now that the human has corrected the decisions it was about to make on their behalf. Output 2-4 short imperative sentences the agent must follow, leading with what the human CHANGED: what to do differently, what not to do, what to show or check with the human. Be concrete to the task. No preamble.",
-        prompt: `${quote({ task, plan })}\n\n${prioritiesText}${decided}${approval.instructions?.length ? `\n\nTHE HUMAN ALSO SAID:\n${approval.instructions.map((t) => `- ${t}`).join("\n")}` : ""}${dialsSet ? `\n\nDIALS:\n${dials}` : ""}\n\nHARD LINES: ${lines}${approval.hard_lines.budget_cap ? `; budget $${(approval.budget_cents / 100).toFixed(2)}` : ""}${approval.notes ? `\n\nHUMAN NOTE: ${approval.notes}` : ""}`,
+        system: OVERSIGHT_ROLE + GUIDANCE_SYSTEM,
+        prompt,
       }),
     );
-    return text.trim();
+    return text.trim() || fallbackGuidance(changes);
   } catch {
-    return `Follow the human's decisions exactly. Respect hard lines: ${lines}.`;
+    return fallbackGuidance(changes);
   }
 }
