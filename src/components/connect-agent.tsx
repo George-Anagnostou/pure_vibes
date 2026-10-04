@@ -90,112 +90,7 @@ export function clientSetups(origin: string, key: string): ClientSetup[] {
     {
       id: "claude-desktop",
       label: "Claude Desktop",
-      steps: [
-        {
-          hint: "Settings → Developer → Edit Config. Add this to claude_desktop_config.json (needs Node.js):",
-          // Claude Desktop splits args on spaces (mcp-remote README), so the
-          // header value goes through env, which it does not split.
-          code: JSON.stringify(
-            {
-              mcpServers: {
-                glassbox: {
-                  command: "npx",
-                  args: [
-                    "-y",
-                    "mcp-remote",
-                    mcpUrl,
-                    "--header",
-                    "Authorization:${AUTH_HEADER}",
-                  ],
-                  env: { AUTH_HEADER: `Bearer ${key}` },
-                },
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-      after:
-        "Quit and reopen Claude Desktop. Glass Box shows under the tools icon.",
-    },
-    {
-      id: "other",
-      label: "Cursor & others",
-      steps: [
-        {
-          hint: "Cursor: .cursor/mcp.json (or Settings → MCP). Most MCP clients take the same JSON.",
-          code: JSON.stringify(
-            {
-              mcpServers: {
-                glassbox: {
-                  url: mcpUrl,
-                  headers: { Authorization: `Bearer ${key}` },
-                },
-              },
-            },
-            null,
-            2,
-          ),
-        },
-        {
-          hint: "Only takes a URL? Use this one. The key is in it, so keep it private.",
-          code: `${mcpUrl}?key=${key}`,
-        },
-      ],
-      after: "Restart the client so it picks up Glass Box.",
-    },
-  ];
-}
-
-// One block the human pastes into their agent's chat; the agent runs the kit
-// installer itself (MCP server + hooks + CLAUDE.md), then asks for a restart.
-export function agentPrompt(origin: string, key: string) {
-  return `Connect this project to Glass Box so you check your plan with me before you act. From the project root, run:
-
-curl -fsSL ${origin}/api/agent-kit/install.mjs -o glassbox-install.mjs
-node glassbox-install.mjs . --key ${key} --url ${origin}
-rm glassbox-install.mjs
-
-Then tell me to restart Claude Code in this folder and approve the "glassbox" MCP server if asked. After the restart, run /mcp to confirm glassbox is connected.`;
-}
-
-// One terminal line: /install downloads and runs the agent kit installer.
-export function installCommand(origin: string, key: string) {
-  return `curl -fsSL ${origin}/install | sh -s -- ${key}`;
-}
-
-export function setupSnippets(origin: string, key: string) {
-  const mcpUrl = `${origin}/api/mcp/mcp`;
-  return [
-    {
-      id: "terminal",
-      title: "Quickest: one line in your terminal",
-      hint: `Run in your project folder. Sets up Glass Box for Claude Code (needs Node 18+). To keep the key out of your shell history, run "curl -fsSL ${origin}/install | sh" and paste the key when asked.`,
-      code: installCommand(origin, key),
-    },
-    {
-      id: "paste",
-      title: "Easiest: paste this into your agent",
-      hint: "Paste into Claude Code in your project. It installs Glass Box for you (MCP server, auto pop-up, and instructions to check in before acting).",
-      code: agentPrompt(origin, key),
-    },
-    {
-      id: "claude",
-      title: "Claude Code",
-      hint: "Run in your project directory. Then /mcp to confirm “glassbox” is connected.",
-      code: claudeCodeCommand(origin, key),
-    },
-    {
-      id: "kit",
-      title: "Claude Code + auto pop-up (agent kit)",
-      hint: "Installs the MCP server plus hooks that open the review window for you and keep the approved plan in context. Needs Node 18+.",
-      code: `curl -fsSL ${origin}/api/agent-kit/install.mjs -o glassbox-install.mjs\nnode glassbox-install.mjs . --key ${key} --url ${origin}`,
-    },
-    {
-      id: "cursor",
-      title: "Cursor",
-      hint: "Save as .cursor/mcp.json in your project (or ~/.cursor/mcp.json for all projects). Keep it out of git.",
+      hint: "Settings → Developer → Edit Config. Add this to claude_desktop_config.json (needs Node.js):",
       code: JSON.stringify(
         {
           mcpServers: {
@@ -222,7 +117,7 @@ export function setupSnippets(origin: string, key: string) {
     {
       id: "other",
       label: "Cursor & others",
-      hint: "Cursor: save as ~/.cursor/mcp.json (or Settings → MCP → Add). Most MCP clients take the same JSON.",
+      hint: "Cursor: .cursor/mcp.json (or Settings → MCP). Most MCP clients take the same JSON.",
       code: JSON.stringify(
         {
           mcpServers: {
@@ -236,10 +131,10 @@ export function setupSnippets(origin: string, key: string) {
         2,
       ),
       extra: {
-        hint: "App only takes a URL? Use this one (the key is in it, so keep it private):",
+        hint: "Only takes a URL? Use this one. The key is in it, so keep it private.",
         code: `${mcpUrl}?key=${key}`,
       },
-      after: "Restart the app so it picks up Glass Box.",
+      after: "Restart the client so it picks up Glass Box.",
       remove: { text: "deleting the glassbox entry" },
     },
   ];
