@@ -7,7 +7,7 @@
 // agent to show the human the link instead. Never fails the tool call.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readStdin } from "./glassbox-lib.mjs";
+import { readStdin, rememberStatus } from "./glassbox-lib.mjs";
 
 const WIDTH = 480;
 const HEIGHT = 820;
@@ -16,6 +16,8 @@ const input = await readStdin();
 const raw = JSON.stringify(input.tool_response ?? input.tool_result ?? "");
 const url = raw.match(/https?:\/\/[^"\s\\]+\/align\/[0-9a-f-]{36}/)?.[0];
 if (!url) process.exit(0); // e.g. align errored, or the contract came straight back
+// Lets the Stop / context hooks say "the human has answered" when it flips.
+rememberStatus(url.split("/align/")[1], "pending");
 
 // A missing opener (no xdg-open, no Chrome) must not crash the hook.
 const detached = (cmd, args) => {
@@ -73,8 +75,8 @@ if (!canOpen) {
 }
 
 const additionalContext = canOpen
-  ? `Glass Box opened a pop-up for the human at ${url}. Also show them that link in one line in case no window appeared. Call get_contract now and keep calling it until they submit; don't proceed before that.`
-  : `Glass Box could not open a window on this machine. Show the human this link now so they can review your plan: ${url} . Then call get_contract and keep calling it until they submit; don't proceed before that.`;
+  ? `Glass Box opened a pop-up for the human at ${url}. Also show them that link in one line in case no window appeared. Call get_contract now and keep calling it until status is approved or rejected; the human may take several minutes, so don't stop or proceed before that.`
+  : `Glass Box could not open a window on this machine. Show the human this link now so they can review your plan: ${url} . Then call get_contract and keep calling it until status is approved or rejected; the human may take several minutes, so don't stop or proceed before that.`;
 
 process.stdout.write(
   JSON.stringify({

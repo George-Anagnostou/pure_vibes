@@ -12,7 +12,8 @@
 // --url defaults to $GLASSBOX_URL, then the hosted Glass Box below.
 // Writes (all local to <project-dir>):
 //   .mcp.json                         glassbox HTTP MCP server with the agent key
-//   .claude/hooks/glassbox/*.mjs      context re-injection + PreToolUse guard
+//   .claude/hooks/glassbox/*.mjs      context re-injection, PreToolUse guard, pop-up,
+//                                     Stop hook (keeps the agent waiting for the human)
 //   .claude/settings.local.json       hook wiring + GLASSBOX_URL / GLASSBOX_AGENT_KEY env
 //   CLAUDE.md                         appends the "treat the contract as binding" section
 // .mcp.json and settings.local.json contain the key: they are added to .gitignore.
@@ -69,6 +70,7 @@ const HOOKS = [
   "glassbox-context.mjs",
   "glassbox-guard.mjs",
   "glassbox-popup.mjs",
+  "glassbox-stop.mjs",
 ];
 const hookSources = await Promise.all(HOOKS.map((f) => kitFile(`hooks/${f}`)));
 const section = await kitFile("CLAUDE.glassbox.md");
@@ -141,6 +143,8 @@ const ours = {
     matcher: "mcp__glassbox__align|mcp__glassbox__answer_challenges",
     hooks: [hook("glassbox-popup.mjs", 10)],
   },
+  // Blocks the agent from ending its turn while the human is still deciding.
+  Stop: { hooks: [hook("glassbox-stop.mjs", 90)] },
 };
 const isOurs = (entry) =>
   entry?.hooks?.some?.((h) =>
@@ -185,8 +189,9 @@ if (missing.length)
   );
 
 console.log(`Glass Box connected in ${dir}
-  MCP:   ${url}/api/mcp/mcp  (tools: align, answer_challenges, get_contract, checkpoint, request_spend;
+  MCP:   ${url}/api/mcp/mcp  (tools: align, get_contract, checkpoint, request_spend;
          prompt /mcp__glassbox__align)
   Hooks: SessionStart + UserPromptSubmit (contract re-injection), PreToolUse Bash|WebFetch (checkpoint guard),
-         PostToolUse align/answer_challenges (opens the pop-up window for the human)
+         PostToolUse align (opens the pop-up window for the human),
+         Stop (keeps the agent waiting until the human answers)
 Start Claude Code in that directory and run /mcp to confirm "glassbox" is connected.`);
