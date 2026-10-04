@@ -30,7 +30,11 @@ export function ConnectClient({
   const router = useRouter();
   return (
     <>
-      <AgentSetup origin={origin} onMinted={() => router.refresh()} />
+      <AgentSetup
+        origin={origin}
+        keyCount={keys.length}
+        onMinted={() => router.refresh()}
+      />
       <KeyList keys={keys} />
     </>
   );

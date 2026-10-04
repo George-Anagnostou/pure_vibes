@@ -91,16 +91,26 @@ curl -fsSL https://glass-box-app.vercel.app/i/<CODE> | sh
 
 It installs the agent kit: the MCP server, hooks that open the Glass Box pop-up whenever Claude Code checks in (Chrome app window on macOS, default browser elsewhere; over SSH/headless or with `GLASSBOX_POPUP=off` the agent shows you the link instead), and project instructions to check in before acting. Restart Claude Code in that folder and type `/mcp`.
 
-**REST API**: `POST https://glass-box-app.vercel.app/api/review` (same fields as the MCP `align` tool) returns `review_id` and `align_url`; poll `GET https://glass-box-app.vercel.app/api/reviews/<review_id>/contract` until the human approves. Both take `Authorization: Bearer gb_…`.
+**REST API**: the same three steps as the MCP tools (`align` → `answer_challenges` → `get_contract`). Every call takes `Authorization: Bearer gb_…`.
+
+1. `POST /api/review` with `task`, `understanding`, `plan` (the approach; the MCP `align` tool calls this field `approach`), `priorities` (`[{name, how?}]`, highest first) and `decisions` (`[{topic, question, choice, thinks_you_want?, why?, alternatives?}]`). If Glass Box has challenges, it returns `status: "answer_challenges"` with `challenges: [{id, scenario, trade_off}]`; otherwise `status: "pending"` and `align_url`.
+2. **Required when challenges come back:** `POST /api/reviews/<review_id>/answers` with `{"answers": [{"id": "c1", "response": "…", "favors": "<one side of trade_off>", "would_ask_human": true}]}`, one per challenge. The human's pop-up only opens after this; it returns `align_url`.
+3. Show the human `align_url`, then poll `GET /api/reviews/<review_id>/contract` until `status` is `approved` (or `rejected`).
 
 ```bash
 curl -X POST https://glass-box-app.vercel.app/api/review \
   -H "Authorization: Bearer gb_…" -H "Content-Type: application/json" \
-  -d @approach.json
+  -d '{"task": "…", "understanding": "…", "plan": "…", "priorities": [{"name": "Accuracy"}], "decisions": [{"topic": "Source", "question": "Which data source?", "choice": "Official API"}]}'
+
+curl -X POST https://glass-box-app.vercel.app/api/reviews/REVIEW_ID/answers \
+  -H "Authorization: Bearer gb_…" -H "Content-Type: application/json" \
+  -d '{"answers": [{"id": "c1", "response": "…", "favors": "Accuracy", "would_ask_human": true}]}'
 
 curl https://glass-box-app.vercel.app/api/reviews/REVIEW_ID/contract \
   -H "Authorization: Bearer gb_…"
 ```
+
+The app address is moving to `https://glass-box-app.vercel.app`; until that switch is complete, `https://pure-vibes-smoky.vercel.app` also works in every command above.
 
 Check an endpoint end to end (health, 401, CORS, tools/prompts, `get_contract` error):
 

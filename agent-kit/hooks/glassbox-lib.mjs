@@ -4,7 +4,7 @@
 //   GLASSBOX_AGENT_KEY  gb_... minted on the Glass Box dashboard
 
 export const base =
-  // Same default as install.mjs (the hosted app); the installer always sets GLASSBOX_URL.
+  // The hosted app (install.mjs sets GLASSBOX_URL explicitly; this is only a fallback).
   (process.env.GLASSBOX_URL ?? "https://glass-box-app.vercel.app").replace(
     /\/$/,
     "",

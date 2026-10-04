@@ -128,6 +128,19 @@ try {
       answered.align_url?.endsWith(`/align/${review.review_id}`),
     `answers accepted; align_url points at /align/[id] (${ansRes.status} ${answered.error ?? ""})`,
   );
+  const reAns = await fetch(`${base}/api/reviews/${review.review_id}/answers`, {
+    method: "POST",
+    headers: agentHeaders,
+    body: JSON.stringify({
+      answers: review.challenges.map((c: { id: string }) => ({
+        id: c.id,
+        response: "changed my mind",
+        favors: "",
+        would_ask_human: false,
+      })),
+    }),
+  });
+  assert(reAns.status === 409, `re-answering rejected (${reAns.status})`);
   const { data: stored } = await admin
     .from("reviews")
     .select("stated, critique")

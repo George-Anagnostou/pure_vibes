@@ -1,4 +1,25 @@
 // The /install shell script. Kept out of the route file (routes may only export handlers).
+
+// One-time codes must only be redeemed by the command-line fetch they were made for:
+// link unfurlers (Slack, iMessage), browsers and scanners would otherwise burn them.
+export function isCommandLineFetch(userAgent: string | null): boolean {
+  return /^(curl|wget|fetch|libfetch)\//i.test(userAgent?.trim() ?? "");
+}
+
+// Shown to anything else that opens /i/<code>: valid shell, readable as text, and the
+// code is left unused.
+export function notATerminalScript(url: string): string {
+  return `#!/bin/sh
+# This is a one-time Glass Box install link. It only works from a terminal:
+#
+#   curl -fsSL ${url} | sh
+#
+# Run that in your project folder. Opening it in a browser does not use it up.
+echo "Glass Box: run this from a terminal: curl -fsSL ${url} | sh" >&2
+exit 1
+`;
+}
+
 // With `key`, the script is a one-time personal installer (served from /i/<code>)
 // and needs no input; without it, it asks for a key.
 export function script(origin: string, key?: string): string {
