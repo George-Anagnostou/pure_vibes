@@ -2,8 +2,11 @@
 // Usage (app running on GLASSBOX_URL, default http://localhost:3000):
 //   npx tsx --env-file=.env.local scripts/e2e-smoke.mts
 // Creates a throwaway user + agent key, runs the Beat 2 flow
-// (agent key -> review -> approve -> contract -> checkpoint), checks the events log, then deletes the user.
+// (agent key -> review (pending at once) -> Stop hook waits -> approve -> contract -> checkpoint), checks the events log, then deletes the user.
 import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
@@ -99,34 +102,21 @@ try {
   );
   assert(!review.critique && !review.revealed, "agent gets no analysis back");
 
-  step("Agent answers Glass Box's challenges before the human sees anything");
+  step("No challenge step: the review is pending for the human right away");
   assert(
-    review.status === "answer_challenges" && review.challenges?.length >= 1,
-    `got ${review.challenges?.length} challenges: ${review.challenges?.[0]?.scenario?.slice(0, 120)}…`,
+    review.status === "pending" &&
+      !review.challenges &&
+      review.align_url?.endsWith(`/align/${review.review_id}`),
+    `status ${review.status}; align_url points at /align/[id]`,
   );
   const ansRes = await fetch(
     `${base}/api/reviews/${review.review_id}/answers`,
-    {
-      method: "POST",
-      headers: agentHeaders,
-      body: JSON.stringify({
-        answers: review.challenges.map(
-          (c: { id: string; trade_off: string }) => ({
-            id: c.id,
-            response:
-              "I'd answer from my own knowledge and ask before anything restricted.",
-            favors: c.trade_off.split(" vs ")[0] ?? "",
-            would_ask_human: true,
-          }),
-        ),
-      }),
-    },
+    { method: "POST", headers: agentHeaders, body: JSON.stringify({}) },
   );
   const answered = await ansRes.json();
   assert(
-    ansRes.status === 200 &&
-      answered.align_url?.endsWith(`/align/${review.review_id}`),
-    `answers accepted; align_url points at /align/[id] (${ansRes.status} ${answered.error ?? ""})`,
+    ansRes.status === 200 && answered.status === "pending",
+    `legacy answers route is a harmless no-op (${ansRes.status} ${answered.error ?? ""})`,
   );
   const reAns = await fetch(`${base}/api/reviews/${review.review_id}/answers`, {
     method: "POST",
@@ -184,6 +174,37 @@ try {
   ).json();
   assert(pend.status === "pending", "contract status pending");
 
+  step("Stop hook keeps the agent waiting while the human decides");
+  const transcript = join(tmpdir(), `glassbox-e2e-${review.review_id}.jsonl`);
+  writeFileSync(
+    transcript,
+    `${JSON.stringify({ type: "tool_result", text: review.review_id })}\n`,
+  );
+  const stopHook = () => {
+    const r = spawnSync("node", ["agent-kit/hooks/glassbox-stop.mjs"], {
+      input: JSON.stringify({
+        hook_event_name: "Stop",
+        transcript_path: transcript,
+        stop_hook_active: false,
+      }),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GLASSBOX_URL: base,
+        GLASSBOX_AGENT_KEY: keyBody.key,
+        GLASSBOX_STOP_POLL_MS: "1000",
+      },
+    });
+    return r.stdout ? JSON.parse(r.stdout) : null;
+  };
+  const stopped = stopHook();
+  assert(
+    stopped?.decision === "block" &&
+      stopped.reason.includes(review.review_id) &&
+      stopped.reason.includes("get_contract"),
+    "Stop hook blocks while pending and says to call get_contract",
+  );
+
   step("Wrong agent key cannot read the review");
   const bad = await fetch(`${base}/api/reviews/${review.review_id}/contract`, {
     headers: { authorization: "Bearer gb_nope" },
@@ -215,17 +236,6 @@ try {
         },
       ],
       instructions: ["Say which answers you weren't sure about"],
-      // The human overrules the first situation and accepts the rest.
-      challenges: review.challenges.map(
-        (ch: { id: string; scenario: string }, i: number) => ({
-          id: ch.id,
-          scenario: ch.scenario,
-          agent_response:
-            "I'd answer from my own knowledge and ask before anything restricted.",
-          approved: i !== 0,
-          ...(i === 0 ? { instead: "Skip the question and flag it" } : {}),
-        }),
-      ),
     }),
   });
   const ap = await apRes.json();
@@ -266,12 +276,19 @@ try {
     "decisions (with the human's change) + instructions in contract",
   );
   assert(
-    c.contract.situations?.length === review.challenges.length &&
-      c.contract.situations[0].human_overrode_you === true &&
-      c.contract.situations[0].do_this === "Skip the question and flag it",
-    `situations ruled in the contract (${c.contract.situations?.length})`,
+    (c.contract.situations ?? []).length === 0,
+    "no situations without challenges",
   );
   console.log(`  message: ${c.contract.message}`);
+
+  step("Stop hook hands over the answer once, then lets the agent stop");
+  const answeredStop = stopHook();
+  assert(
+    answeredStop?.decision === "block" &&
+      answeredStop.reason.includes("the human has answered"),
+    "Stop hook tells the agent the human has answered",
+  );
+  assert(stopHook() === null, "then allows stopping");
 
   step("Hook endpoint returns the latest contract");
   const latest = await (

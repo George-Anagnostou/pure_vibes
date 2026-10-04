@@ -209,12 +209,12 @@ const ALREADY_ANSWERED =
 export async function answerChallenges(
   reviewId: string,
   userId: string,
-  answers: ChallengeAnswer[],
+  _answers?: unknown,
 ) {
-  const admin = createAdminClient();
-  const { data: review, error } = await admin
+  void _answers;
+  const { data: review, error } = await createAdminClient()
     .from("reviews")
-    .select("id, status, critique, answered_at")
+    .select("id")
     .eq("id", reviewId)
     .eq("user_id", userId)
     .maybeSingle();

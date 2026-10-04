@@ -19,10 +19,11 @@ import { HttpError } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-// Claude Code abandons an MCP call after ~60s. align returns as soon as the review
-// exists (~5s) so the client can open the pop-up; get_contract long-polls up to 40s.
-const ALIGN_WAIT_UNTIL_MS = 0;
-const GET_CONTRACT_WAIT_MS = 40_000;
+// Claude Code abandons an MCP call after ~60s (and maxDuration is 60s). align returns as
+// soon as the review exists (~5s) so the client can open the pop-up; get_contract
+// long-polls up to 50s per call. Humans often take minutes, so a pending result tells
+// the agent, unmistakably, to call get_contract again.
+const GET_CONTRACT_WAIT_MS = 50_000;
 
 // Glass Box MCP server. Every tool is scoped to the user who owns the gb_ key.
 // mcp-handler ignores the path, so /api/mcp/mcp is the canonical endpoint.
@@ -61,7 +62,7 @@ function contractPayload(lookup: ContractLookup) {
     return {
       status: "pending",
       align_url: lookup.align_url,
-      next: "A pop-up is opening for the human at align_url (if you can't see one opened, show them the link). Call get_contract now — it waits for them to submit. Repeat until approved.",
+      next: PENDING_NEXT,
     };
   }
   return {
@@ -71,16 +72,20 @@ function contractPayload(lookup: ContractLookup) {
   };
 }
 
+// Same wording as the agent kit's Stop hook; keep them in step.
+const PENDING_NEXT =
+  "The human hasn't answered yet (a pop-up is open for them at align_url; if you can't tell it opened, show them the link once). Call get_contract again now with the same review_id. Do not proceed, do not ask the human to paste anything; keep calling until status is approved or rejected. Humans often take several minutes; that is normal.";
+
 const reviewId = z.uuid().describe("review_id returned by align");
 
 const ALIGN_DESCRIPTION =
-  "Glass Box interview: before you act, show the human what you think the task is and how you'll weigh trade-offs, so they can correct you. Call this BEFORE acting on any task with real choices (scope, data, cost, time, quality, risk), and again when your understanding changes. Send: `understanding` (what you think the task is: the goal, what success looks like, what's in and out of scope, in your words); `approach` (2-4 sentences); `priorities`: 4-10 things you're weighing, FORCE-RANKED highest first with no ties, each with why and source (request / instructions / rules / judgment / assumption); and optionally `decisions` you're making on their behalf (choice, what you think they want, alternatives with trade-offs, est tokens/$/time). Glass Box replies with real-world challenges that pit your priorities against each other: answer every one honestly with `answer_challenges` (what you'd actually do, which priority wins, whether you'd ask the human). Then a pop-up opens for the human; call get_contract until approved. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each decision and situation says, follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
+  "Glass Box interview: before you act, show the human what you think the task is and how you'll weigh trade-offs, so they can correct you. Call this BEFORE acting on any task with real choices (scope, data, cost, time, quality, risk), and again when your understanding changes. Send: `understanding` (what you think the task is: the goal, what success looks like, what's in and out of scope, in your words); `approach` (2-4 sentences); `priorities`: 4-10 things you're weighing, FORCE-RANKED highest first with no ties, each with why and source (request / instructions / rules / judgment / assumption); and optionally `decisions` you're making on their behalf (choice, what you think they want, alternatives with trade-offs, est tokens/$/time). Glass Box returns a review_id and opens a pop-up for the human. Then call get_contract with that review_id and KEEP calling it (each call waits up to ~50s) until status is approved or rejected: the human may take several minutes, so do not stop, proceed or ask them to paste anything in the meantime. The result is binding: weigh trade-offs in the order of ranked_priorities, never optimize for removed_priorities, do what each decision and situation says, follow instructions_from_human and plan_guidance, and call `checkpoint` before each consequential action.";
 
 // Sent on initialize; clients such as Claude Code put this in the agent's
 // context, so agents added with a plain `claude mcp add` (no CLAUDE.md from the
 // agent kit) still know when to check in with the human.
 const SERVER_INSTRUCTIONS =
-  "Glass Box lets the human check how you're approaching a task before you act. Before acting on any task with real choices (scope, data sources, cost, time, quality, risk), including writing code or scripts that will reach external services, people or their data, call `align` with what you think the task is, your approach, your force-ranked priorities and the decisions you'd otherwise make silently. Answer every challenge it returns with `answer_challenges`. Then show the human the align_url in one line and call `get_contract` until it is approved; don't start the work before that. The approved contract is binding: follow ranked_priorities, decisions and instructions_from_human, and tell the human in one or two lines what changed. Call `checkpoint` before spending, deleting, contacting anyone or accessing anything new, and never perform an action it blocks. If a new significant decision comes up, call `align` again. Skip Glass Box only for trivial requests with no real choices: if you would end by telling the human which choices you made for them, align on those choices first instead.";
+  "Glass Box lets the human check how you're approaching a task before you act. Before acting on any task with real choices (scope, data sources, cost, time, quality, risk), including writing code or scripts that will reach external services, people or their data, call `align` with what you think the task is, your approach, your force-ranked priorities and the decisions you'd otherwise make silently. Then show the human the align_url in one line and call `get_contract` with the review_id, again and again, until status is approved or rejected. The human may take several minutes; each call waits up to ~50s, so just call it again when it says pending. Don't start the work, end your turn or ask the human to paste anything before that. The approved contract is binding: follow ranked_priorities, decisions and instructions_from_human, and tell the human in one or two lines what changed. Call `checkpoint` before spending, deleting, contacting anyone or accessing anything new, and never perform an action it blocks. If a new significant decision comes up, call `align` again. Skip Glass Box only for trivial requests with no real choices: if you would end by telling the human which choices you made for them, align on those choices first instead.";
 
 const handler = createMcpHandler(
   (server) => {
@@ -134,7 +139,6 @@ const handler = createMcpHandler(
         { task, understanding, approach, priorities, decisions, agent_name },
         ctx,
       ) => {
-        const started = Date.now();
         try {
           const agent = agentFrom(ctx as ToolCtx);
           const review = await createReview({
@@ -146,30 +150,13 @@ const handler = createMcpHandler(
             priorities,
             decisions,
           });
-          // The interview: the agent answers Glass Box's challenges before the human sees anything.
-          if (review.critique.challenges.length) {
-            return text({
-              review_id: review.review_id,
-              status: "answer_challenges",
-              challenges: review.critique.challenges.map(
-                ({ id, scenario, tests }) => ({
-                  id,
-                  scenario,
-                  trade_off: tests.join(" vs "),
-                }),
-              ),
-              next: "Answer every challenge honestly with answer_challenges: what you'd actually do, which priority wins (favors), and whether you'd ask the human first. Don't hedge; pick.",
-            });
-          }
-          const lookup = await waitForContract(
-            review.review_id,
-            agent.userId,
-            started + ALIGN_WAIT_UNTIL_MS,
-          );
           // The analysis is for the human only: the agent sees nothing until they decide.
           return text({
             review_id: review.review_id,
-            ...contractPayload(lookup),
+            ...contractPayload({
+              status: "pending",
+              align_url: review.align_url,
+            }),
           });
         } catch (error) {
           return toolError(error);
@@ -180,12 +167,12 @@ const handler = createMcpHandler(
     server.registerTool(
       "answer_challenges",
       {
-        title: "Answer Glass Box's challenges",
+        title: "Answer Glass Box's challenges (no longer needed)",
         description:
-          "Answer every challenge align returned: what you'd actually do in that situation, which of the two priorities wins (favors), and whether you'd stop and ask the human. Be honest; the human sees your answers and may overrule them. Then a pop-up opens for the human; call get_contract until approved.",
+          "Deprecated: align no longer returns challenges, so there is nothing to answer. Kept so older clients don't break; returns the same status as get_contract without waiting. Call get_contract instead.",
         inputSchema: z.object({
           review_id: reviewId,
-          answers: z.array(ChallengeAnswerSchema).min(1).max(10),
+          answers: z.array(ChallengeAnswerSchema).max(10).optional(),
         }),
       },
       async ({ review_id, answers }, ctx) => {
@@ -207,7 +194,7 @@ const handler = createMcpHandler(
       {
         title: "Get priority contract",
         description:
-          "Wait (up to ~40s) for the human-approved priority contract for a review. Follow it exactly once approved; if still pending, call again.",
+          "Wait (up to ~50s per call) for the human's answer to a review. If status is pending, call get_contract again immediately with the same review_id, and keep calling until it is approved or rejected: the human may take several minutes. Once approved, follow the contract exactly.",
         inputSchema: z.object({ review_id: reviewId }),
       },
       async ({ review_id }, ctx) => {
@@ -317,7 +304,7 @@ const handler = createMcpHandler(
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, what you think the task is, what you're weighing (force-ranked), and the decisions you're making on my behalf; then answer Glass Box's challenges (your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
+              text: `Pause and check your approach with me using Glass Box. Call the glassbox \`align\` tool with your task, how you're approaching it, what you think the task is, what you're weighing (force-ranked), and the decisions you're making on my behalf; including for each decision your choice, what you think I want, the alternatives and trade-offs, and the cost/time of your choice. Then keep calling \`get_contract\` until I've answered (it can take me a few minutes). When my decisions come back, follow them exactly and tell me in one or two lines what changed.${focus ? ` I especially want you to reconsider: ${focus}.` : ""}`,
             },
           },
         ],

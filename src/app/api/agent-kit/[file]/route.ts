@@ -13,6 +13,7 @@ const FILES: Record<string, string> = {
   "glassbox-context.mjs": "hooks/glassbox-context.mjs",
   "glassbox-guard.mjs": "hooks/glassbox-guard.mjs",
   "glassbox-popup.mjs": "hooks/glassbox-popup.mjs",
+  "glassbox-stop.mjs": "hooks/glassbox-stop.mjs",
 };
 
 export async function GET(

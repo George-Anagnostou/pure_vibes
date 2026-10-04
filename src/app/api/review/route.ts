@@ -20,7 +20,7 @@ const body = z.object({
 // POST /api/review — an agent submits its approach (plan) and the decisions it's making on
 // the human's behalf (see DecisionSchema): Reveal + Critique,
 // stored as a pending review. Auth: Authorization: Bearer gb_... (agent key).
-// Returns only {review_id, align_url}: the analysis is for the human, not the agent.
+// Returns only {review_id, align_url, status: "pending"}: the analysis is for the human.
 export async function POST(request: Request) {
   try {
     const agent = await requireAgent(request);
@@ -42,25 +42,15 @@ export async function POST(request: Request) {
       decisions,
       priorities,
     });
-    // The agent answers Glass Box's challenges first; the human's pop-up opens after.
-    const challenges = result.critique.challenges;
+    // No challenge step: the human's pop-up opens right away. Poll
+    // GET /api/agent/contract (or MCP get_contract) until approved or rejected.
     return json(
-      challenges.length
-        ? {
-            review_id: result.review_id,
-            status: "answer_challenges",
-            challenges: challenges.map(({ id, scenario, tests }) => ({
-              id,
-              scenario,
-              trade_off: tests.join(" vs "),
-            })),
-            next: `POST /api/reviews/${result.review_id}/answers with {answers: [{id, response, favors, would_ask_human}]}`,
-          }
-        : {
-            review_id: result.review_id,
-            align_url: result.align_url,
-            status: "pending",
-          },
+      {
+        review_id: result.review_id,
+        align_url: result.align_url,
+        status: "pending",
+        next: "The human may take several minutes. Keep polling GET /api/agent/contract until status is approved or rejected; do not proceed before that.",
+      },
       201,
     );
   } catch (error) {

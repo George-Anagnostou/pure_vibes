@@ -13,6 +13,7 @@ import {
 import {
   CHALLENGE_SCENARIO_MAX,
   CritiqueSchema,
+  type Challenge,
   RevealSchema,
   type Critique,
   type Decision,
@@ -73,8 +74,7 @@ Your job is to find where the agent's picture of what this person wants is proba
    Give 1-3 priority suggestions and 1-3 decision suggestions.
    Write "why" as one short, concrete sentence to the human about THEIR situation. Never challenge a decision whose choice already matches your recommendation.
 2. Flag any decision or step that could cross a hard line: no_unauthorized_access (logging in without permission, guessing credentials, forging sessions, scraping behind auth), no_deception (misrepresenting work or identity), no_unapproved_contact (emailing/messaging people), budget_cap (spending meaningful money without asking). Severity "block" only for clear violations, "warn" for risky-but-ambiguous. Only real crossings; name the decision. If a hard line is at risk, include a suggestion that addresses it.
-3. challenges (3-5): the interview. Invent realistic situations the agent will plausibly run into on THIS task, given what it thinks the task is. Each must force a real trade-off between TWO of the agent's own priorities: put their numbers from the numbered priority list in "priority_numbers" and their exact names in "tests" (never invent a priority that isn't on the list), with concrete specifics: prices, times, counts, names, deadlines. No hypotheticals about hacking or ethics unless the task invites them. End each with a direct question ("Which do you book?", "Do you include them or skip them?"). Cover different priority pairs, especially pairs where the agent's stated order looks doubtful or where the person's real preference is unknown. "why_it_matters" is one line to the human.
-4. stated_vs_revealed: one line, "Agent thinks you want: <its read>. You probably want: <your read>."
+3. stated_vs_revealed: one line, "Agent thinks you want: <its read>. You probably want: <your read>."
 Verdict: red only with a block-severity risk; yellow if the agent's read of what this person wants is clearly off; else green.
 Be concise and concrete.`;
 
@@ -257,9 +257,10 @@ export function sanitizeSuggestions(
   return out;
 }
 
+// Older reviews only (the critique no longer generates challenges).
 // Number challenges c1..cN and map their "tests" onto the agent's exact priority names.
 export function sanitizeChallenges(
-  challenges: Critique["challenges"],
+  challenges: Challenge[],
   priorities: StatedPriority[] = [],
 ) {
   const byWords = (name: string) =>
@@ -326,7 +327,6 @@ export async function critique(
           stated,
           priorities,
         ),
-        challenges: sanitizeChallenges(output.challenges, priorities),
       };
     },
     deadline,
@@ -358,7 +358,6 @@ export const UNAVAILABLE_REVEAL: Revealed = {
   headline: "Glass Box couldn't analyze this right now.",
 };
 export const UNAVAILABLE_CRITIQUE: Critique = {
-  challenges: [],
   suggestions: [
     {
       action: "add",

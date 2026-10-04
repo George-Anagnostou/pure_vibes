@@ -7,11 +7,11 @@ import { errorResponse, HttpError, json, readJson } from "@/lib/http";
 export const runtime = "nodejs";
 
 const Body = z.object({
-  answers: z.array(ChallengeAnswerSchema).min(1).max(10),
+  answers: z.array(ChallengeAnswerSchema).max(10).optional(),
 });
 
-// POST /api/reviews/:id/answers — the agent answers Glass Box's challenges; the human's
-// pop-up opens after this. Returns {status: "pending", align_url}.
+// POST /api/reviews/:id/answers — legacy: the challenge step is gone, so this is a no-op
+// kept for older clients. Returns {status: "pending", align_url} for the caller's review.
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ id: string }> },

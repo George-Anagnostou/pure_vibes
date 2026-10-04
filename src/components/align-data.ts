@@ -280,9 +280,11 @@ const challengesOf = (critique: Json | null) =>
     ? critique.challenges
     : [];
 
-// Ready for the human when the agent has answered its challenges, or there were none.
+// Every review is ready for the human as soon as it exists: agents no longer answer
+// challenges first (older reviews still waiting on answers show right away too).
 export function isReady(review: Pick<AlignReview, "critique" | "answered_at">) {
-  return !!review.answered_at || challengesOf(review.critique).length === 0;
+  void review;
+  return true;
 }
 
 export function readChallenges(review: AlignReview): UiChallenge[] {
