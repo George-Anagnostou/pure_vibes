@@ -320,12 +320,9 @@ export const ChallengeRulingSchema = z.object({
 export type ChallengeRuling = z.infer<typeof ChallengeRulingSchema>;
 
 // ---- Critique (call #2, independent; everything but suggestions stays under the hood) ----
+// No challenges any more (the agent no longer answers an interview before the human
+// sees the review); older rows may still carry critique.challenges, hence the optional field.
 export const CritiqueSchema = z.object({
-  challenges: z
-    .array(ChallengeSchema)
-    .describe(
-      "3-5 real-world challenges, each forcing a trade-off between two of the agent's priorities",
-    ),
   suggestions: z
     .array(SuggestionSchema)
     .describe("2-5 suggestions, most important first"),
@@ -358,7 +355,9 @@ export const CritiqueSchema = z.object({
     ),
   summary: z.string(),
 });
-export type Critique = z.infer<typeof CritiqueSchema>;
+export type Critique = z.infer<typeof CritiqueSchema> & {
+  challenges?: Challenge[]; // older rows only
+};
 
 // ---- Contract (returned to the agent after the human decides) ----
 export type ContractDecision = {

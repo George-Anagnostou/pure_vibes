@@ -202,43 +202,23 @@ export function toContract(row: ContractRow): Contract {
   };
 }
 
-// The agent answers Glass Box's challenges; only then does the human see the review.
+// Legacy: agents used to answer Glass Box's challenges before the human saw the review.
+// The challenge step is gone; older clients may still call answer_challenges, so this
+// only checks the review belongs to the caller (404 otherwise) and ignores the answers.
 export async function answerChallenges(
   reviewId: string,
   userId: string,
-  answers: ChallengeAnswer[],
+  _answers?: unknown,
 ) {
-  const admin = createAdminClient();
-  const { data: review, error } = await admin
+  void _answers;
+  const { data: review, error } = await createAdminClient()
     .from("reviews")
-    .select("id, status, critique, answered_at")
+    .select("id")
     .eq("id", reviewId)
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
   if (!review) throw new HttpError(404, "Review not found.");
-  if (review.status !== "pending")
-    throw new HttpError(409, `Review is already ${review.status}.`);
-  const challenges =
-    (review.critique as { challenges?: Challenge[] } | null)?.challenges ?? [];
-  const known = new Set(challenges.map((c) => c.id));
-  const valid = answers.filter((a) => known.has(a.id));
-  const missing = challenges
-    .filter((c) => !valid.some((a) => a.id === c.id))
-    .map((c) => c.id);
-  if (missing.length)
-    throw new HttpError(
-      400,
-      `Answer every challenge. Missing: ${missing.join(", ")}.`,
-    );
-  const { error: upErr } = await admin
-    .from("reviews")
-    .update({
-      challenge_answers: valid as unknown as Json,
-      answered_at: new Date().toISOString(),
-    })
-    .eq("id", reviewId);
-  if (upErr) throw upErr;
 }
 
 // What the agent's answers say about its real ranking: each challenge pits two priorities;
