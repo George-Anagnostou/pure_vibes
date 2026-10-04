@@ -1,10 +1,7 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import {
-  readDecisions,
-  readDecisionSuggestions,
-  readChallenges,
   readPrioritySuggestions,
   readStated,
   samePriority,
@@ -15,26 +12,11 @@ import styles from "@/components/glassbox/glassbox.module.css";
 import local from "@/components/glassbox/align.module.css";
 import { PlusIcon } from "@/components/glassbox/plus-icon";
 import { RankedPriorities } from "@/components/glassbox/ranked-priorities";
-import { ChallengeCards, type Ruling } from "@/components/challenge-cards";
-import {
-  answerFor,
-  buildCards,
-  DecisionCards,
-  ExtraInstructions,
-  type Answer,
-} from "@/components/decision-cards";
-
-export type FinalDecision = { topic: string; answer: string; changed: boolean };
 
 type Phase =
   | { kind: "editing" }
   | { kind: "busy"; action: "send" | "reject" }
-  | {
-      kind: "sent";
-      decisions: FinalDecision[];
-      instructions: string[];
-      priorities: string[];
-    }
+  | { kind: "sent"; priorities: string[] }
   | { kind: "rejected" };
 
 async function post(path: string, body: unknown) {
@@ -48,9 +30,6 @@ async function post(path: string, body: unknown) {
     throw new Error("Your session expired. Sign in again, then retry.");
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status}).`);
 }
-
-const same = (a: string, b: string) =>
-  a.trim().toLowerCase() === b.trim().toLowerCase();
 
 const HINT = {
   drop_priority: "Maybe drop",
@@ -96,10 +75,10 @@ function initialBoard(review: AlignReview): Board {
   return { ranked, pool };
 }
 
-// The whole review in one screen, on Kathryn's design system (DESIGN.md): what the
-// agent thinks the task is, its ranked priorities (drag, remove, pull in Glass Box's
-// suggestions or add your own), its answers to the challenges, the decisions it's
-// making for you, then Continue. Used on /align/[id] and in the inbox sheet.
+// The whole review in one screen, on Kathryn's design system (DESIGN.md): the agent's
+// ranked priorities (drag, remove, pull in Glass Box's suggestions or add your own),
+// what it thinks the task is, then Continue. Used on /align/[id] and in the inbox
+// sheet. Older reviews may carry challenges/decisions; this view ignores them.
 export function AlignPanel({
   review,
   onDone,
@@ -109,25 +88,10 @@ export function AlignPanel({
   onDone?: () => void;
   compact?: boolean; // single column (inbox sheet)
 }) {
-  const cards = useMemo(
-    () =>
-      buildCards(
-        readDecisions(review.stated),
-        readDecisionSuggestions(review.critique),
-      ),
-    [review.stated, review.critique],
-  );
   const [board, setBoard] = useState<Board>(() => initialBoard(review));
   const [deleted, setDeleted] = useState<BoardItem[]>([]);
   const [initialOrder] = useState(() =>
     board.ranked.map((i) => i.id).join("|"),
-  );
-  const [answers, setAnswers] = useState<Record<string, Answer>>({});
-  const challenges = useMemo(() => readChallenges(review), [review]);
-  const [rulings, setRulings] = useState<Record<string, Ruling>>({});
-  const agentRanking = useMemo(
-    () => readStated(review.priorities).map((p) => p.name),
-    [review.priorities],
   );
 
   // Removing a Glass Box suggestion puts it back in the optional list.
@@ -183,79 +147,27 @@ export function AlignPanel({
       .split("|")
       .filter((id) => board.ranked.some((r) => r.id === id))
       .join("|");
-  const [instructions, setInstructions] = useState<string[]>([]);
   const [phase, setPhase] = useState<Phase>({ kind: "editing" });
   const [error, setError] = useState("");
 
-  // Every decision with its final answer; Glass Box cards count only if answered.
-  const finalDecisions = cards.flatMap((card) => {
-    const answer = answerFor(card, answers[card.key]);
-    if (!answer) return [];
-    const changed = card.agentChoice ? !same(answer, card.agentChoice) : true;
-    return [{ card, answer, changed }];
-  });
-  const overruled = challenges.filter(
-    (c) =>
-      rulings[c.id] && !rulings[c.id].approved && rulings[c.id].instead.trim(),
-  );
   const changes =
-    overruled.length +
-    finalDecisions.filter((d) => d.changed).length +
-    instructions.length +
-    addedPriorities.length +
-    removedPriorities.length +
-    (reordered ? 1 : 0);
+    addedPriorities.length + removedPriorities.length + (reordered ? 1 : 0);
 
   async function send() {
-    if (
-      !finalDecisions.length &&
-      !instructions.length &&
-      !board.ranked.length
-    ) {
-      setError("Keep at least one priority or decision.");
+    if (!board.ranked.length) {
+      setError("Keep at least one priority.");
       return;
     }
     setError("");
     setPhase({ kind: "busy", action: "send" });
+    const priorities = board.ranked.map((i) => i.name);
     try {
       await post(`/api/reviews/${review.id}/approve`, {
-        decisions: finalDecisions.map(({ card, answer, changed }) => ({
-          topic: card.topic,
-          question: card.question,
-          answer,
-          ...(card.agentChoice ? { agent_choice: card.agentChoice } : {}),
-          changed,
-        })),
-        ...(board.ranked.length
-          ? { ranked_priorities: board.ranked.map((i) => i.name) }
-          : finalDecisions.length
-            ? {}
-            : { ranked_priorities: ["Follow the human's instructions"] }),
+        ranked_priorities: priorities,
         added_by_human: addedPriorities,
         removed_by_human: removedPriorities,
-        instructions,
-        challenges: challenges.map((c) => {
-          const r = rulings[c.id];
-          const overrule = !!r && !r.approved && !!r.instead.trim();
-          return {
-            id: c.id,
-            scenario: c.scenario,
-            agent_response: c.response ?? "",
-            approved: !overrule,
-            ...(overrule ? { instead: r.instead.trim() } : {}),
-          };
-        }),
       });
-      setPhase({
-        kind: "sent",
-        decisions: finalDecisions.map(({ card, answer, changed }) => ({
-          topic: card.topic,
-          answer,
-          changed,
-        })),
-        instructions,
-        priorities: board.ranked.map((i) => i.name),
-      });
+      setPhase({ kind: "sent", priorities });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not send.");
       setPhase({ kind: "editing" });
@@ -289,11 +201,7 @@ export function AlignPanel({
             : `${review.agent_name} won't go ahead with this.`}
         </p>
         {phase.kind === "sent" && (
-          <FinalDecisions
-            priorities={phase.priorities}
-            decisions={phase.decisions}
-            instructions={phase.instructions}
-          />
+          <FinalDecisions priorities={phase.priorities} />
         )}
         {onDone && (
           <div className={styles.submitBar}>
@@ -369,49 +277,9 @@ export function AlignPanel({
             />
           ) : (
             <p className={`${styles.cardHint} ${local.empty}`}>
-              No priorities left. Add one, or send decisions only.
+              No priorities left. Add one from the list.
             </p>
           )}
-        </section>
-
-        {challenges.length > 0 && (
-          <section className={styles.card} aria-labelledby={`ch-${review.id}`}>
-            <h2 id={`ch-${review.id}`} className={styles.cardTitle}>
-              How i&apos;d handle real situations
-            </h2>
-            <p className={styles.cardHint}>
-              Each one forces a trade-off between my priorities. Confirm my
-              answer or tell me what to do instead.
-            </p>
-            <ChallengeCards
-              challenges={challenges}
-              ranked={agentRanking}
-              rulings={rulings}
-              onRule={(id, r) => setRulings((prev) => ({ ...prev, [id]: r }))}
-            />
-          </section>
-        )}
-
-        {cards.length > 0 && (
-          <section className={styles.card} aria-labelledby={`dec-${review.id}`}>
-            <h2 id={`dec-${review.id}`} className={styles.cardTitle}>
-              Decisions i&apos;m making for you
-            </h2>
-            <p className={styles.cardHint}>
-              Keep my choice, pick another, or tell me what you actually want.
-            </p>
-            <DecisionCards
-              cards={cards}
-              answers={answers}
-              onAnswer={(key, a) =>
-                setAnswers((prev) => ({ ...prev, [key]: a }))
-              }
-            />
-          </section>
-        )}
-
-        <section className={styles.card}>
-          <ExtraInstructions items={instructions} onChange={setInstructions} />
         </section>
 
         {/* Agent context sits at the bottom of the stack (Kathryn). */}
@@ -530,38 +398,14 @@ function Context({ title, children }: { title: string; children: string }) {
   );
 }
 
-export function FinalDecisions({
-  priorities = [],
-  decisions,
-  instructions = [],
-}: {
-  priorities?: string[];
-  decisions: FinalDecision[];
-  instructions?: string[];
-}) {
+export function FinalDecisions({ priorities }: { priorities: string[] }) {
+  if (!priorities.length) return null;
   return (
     <ul className={local.summary}>
-      {priorities.length > 0 && (
-        <li className={local.summaryItem}>
-          <span className={local.summaryLabel}>Priorities</span>
-          <span className={local.summaryValue}>{priorities.join(" > ")}</span>
-        </li>
-      )}
-      {decisions.map((d) => (
-        <li key={d.topic} className={local.summaryItem}>
-          <span className={local.summaryLabel}>
-            {d.topic}
-            {d.changed && <span className={local.changed}>· changed</span>}
-          </span>
-          <span className={local.summaryValue}>{d.answer}</span>
-        </li>
-      ))}
-      {instructions.map((t) => (
-        <li key={t} className={local.summaryItem}>
-          <span className={local.summaryLabel}>You added</span>
-          <span className={local.summaryValue}>{t}</span>
-        </li>
-      ))}
+      <li className={local.summaryItem}>
+        <span className={local.summaryLabel}>Priorities</span>
+        <span className={local.summaryValue}>{priorities.join(" > ")}</span>
+      </li>
     </ul>
   );
 }
