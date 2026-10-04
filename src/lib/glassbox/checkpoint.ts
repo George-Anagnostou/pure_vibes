@@ -221,12 +221,14 @@ export async function runCheckpoint(
       reason: "No approved contract — call align first",
     };
   }
-  // The human's decisions stand in for ranked priorities (first = most weight).
+  // Drift is judged against the human's #1 ranked priority. Older contracts have
+  // no ranking, only decisions: their first decision stands in.
+  const { contract } = lookup;
   const result = evaluateCheckpoint(input, {
-    hard_lines: lookup.contract.hard_lines,
-    ranked_priorities: lookup.contract.decisions.map(
-      (d) => `${d.topic}: ${d.decision}`,
-    ),
+    hard_lines: contract.hard_lines,
+    ranked_priorities: contract.ranked_priorities.length
+      ? contract.ranked_priorities
+      : contract.decisions.map((d) => `${d.topic}: ${d.decision}`),
   });
   await logEvent({
     reviewId,

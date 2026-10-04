@@ -118,6 +118,19 @@ try {
     ansRes.status === 200 && answered.status === "pending",
     `legacy answers route is a harmless no-op (${ansRes.status} ${answered.error ?? ""})`,
   );
+  const reAns = await fetch(`${base}/api/reviews/${review.review_id}/answers`, {
+    method: "POST",
+    headers: agentHeaders,
+    body: JSON.stringify({
+      answers: review.challenges.map((c: { id: string }) => ({
+        id: c.id,
+        response: "changed my mind",
+        favors: "",
+        would_ask_human: false,
+      })),
+    }),
+  });
+  assert(reAns.status === 409, `re-answering rejected (${reAns.status})`);
   const { data: stored } = await admin
     .from("reviews")
     .select("stated, critique")

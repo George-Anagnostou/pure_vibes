@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     } = await readJson(request, body);
     const result = await createReview({
       userId: agent.userId,
-      agentName: agent_name ?? agent.agentName,
+      agentName: agent_name || agent.agentName,
       task,
       understanding,
       plan: plan || approach,

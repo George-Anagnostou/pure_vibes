@@ -100,11 +100,6 @@
   overflow-wrap: anywhere;
 }
 
-.changed {
-  margin-left: 6px;
-  color: #c62828;
-}
-
 /* Inbox sheet: one column regardless of viewport. */
 .compact {
   display: grid;

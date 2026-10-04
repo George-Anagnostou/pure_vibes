@@ -5,6 +5,7 @@ import {
   assertSameOrigin,
   errorResponse,
   HttpError,
+  MAX_BODY_BYTES,
   readJson,
 } from "@/lib/http";
 
@@ -60,11 +61,29 @@ describe("request boundaries", () => {
     const request = new Request("https://example.com", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: "x".repeat(17_000) }),
+      body: JSON.stringify({ text: "x".repeat(MAX_BODY_BYTES + 1) }),
     });
     await expect(readJson(request, z.unknown())).rejects.toMatchObject({
       status: 413,
     });
+  });
+
+  it("accepts realistic large payloads (a 15,000-char plan plus decisions)", async () => {
+    const body = {
+      plan: "p".repeat(15_000),
+      decisions: Array.from({ length: 20 }, () => ({
+        answer: "a".repeat(300),
+      })),
+      challenges: Array.from({ length: 10 }, () => ({
+        scenario: "s".repeat(600),
+      })),
+    };
+    const request = new Request("https://example.com", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await expect(readJson(request, z.unknown())).resolves.toEqual(body);
   });
 
   it("reports invalid JSON and invalid input as client errors", async () => {

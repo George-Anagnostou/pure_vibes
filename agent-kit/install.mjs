@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_URL = "https://glassbox.cards";
+const DEFAULT_URL = "https://glass-box-app.vercel.app";
 const args = process.argv.slice(2);
 const flag = (name) => {
   const i = args.indexOf(name);
@@ -146,16 +146,20 @@ const ours = {
   // Blocks the agent from ending its turn while the human is still deciding.
   Stop: { hooks: [hook("glassbox-stop.mjs", 90)] },
 };
-const isOurs = (entry) =>
-  entry?.hooks?.some?.((h) =>
-    String(h?.command ?? "").includes(".claude/hooks/glassbox/"),
-  );
+const isOurHook = (hook) =>
+  String(hook?.command ?? "").includes(".claude/hooks/glassbox/");
 settings.hooks = { ...settings.hooks };
 for (const [event, entry] of Object.entries(ours)) {
   const existing = Array.isArray(settings.hooks[event])
     ? settings.hooks[event]
     : [];
-  settings.hooks[event] = [...existing.filter((e) => !isOurs(e)), entry];
+  const preserved = existing.flatMap((oldEntry) => {
+    if (!Array.isArray(oldEntry?.hooks) || !oldEntry.hooks.some(isOurHook))
+      return [oldEntry];
+    const hooks = oldEntry.hooks.filter((oldHook) => !isOurHook(oldHook));
+    return hooks.length ? [{ ...oldEntry, hooks }] : [];
+  });
+  settings.hooks[event] = [...preserved, entry];
 }
 writeJson(settingsPath, settings);
 

@@ -1,12 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  isReady,
-  readAnswers,
-  readStrings,
-  STATUS_LABEL,
-} from "@/components/align-data";
+import { isReady, readStrings, STATUS_LABEL } from "@/components/align-data";
 import { AlignPanel, FinalDecisions } from "@/components/align-panel";
 import { WaitingForAgent } from "@/components/waiting-for-agent";
 import { ErrorCard, SignInGate } from "@/components/sign-in-gate";
@@ -65,7 +60,7 @@ export default async function AlignPage({
       ? (
           await supabase
             .from("contracts")
-            .select("decisions, ranked_priorities, notes, challenges")
+            .select("ranked_priorities")
             .eq("review_id", id)
             .maybeSingle()
         ).data
@@ -81,7 +76,11 @@ export default async function AlignPage({
         </h1>
 
         {review.status === "pending" && !isReady(review) ? (
-          <WaitingForAgent agentName={review.agent_name} />
+          <WaitingForAgent
+            agentName={review.agent_name}
+            reviewId={review.id}
+            createdAt={review.created_at}
+          />
         ) : review.status === "pending" ? (
           <AlignPanel review={review} />
         ) : (
@@ -94,15 +93,10 @@ export default async function AlignPage({
             {contract ? (
               <>
                 <p className={`${styles.confirmSub} mt-3`}>
-                  {review.agent_name} is following your decisions:
+                  {review.agent_name} is following your priorities:
                 </p>
                 <FinalDecisions
                   priorities={readStrings(contract.ranked_priorities)}
-                  decisions={readAnswers(contract.decisions)}
-                  instructions={(contract.notes ?? "")
-                    .split("\n")
-                    .map((l) => l.trim())
-                    .filter(Boolean)}
                 />
               </>
             ) : (

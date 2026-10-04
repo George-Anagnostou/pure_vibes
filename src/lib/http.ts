@@ -19,6 +19,10 @@ export function assertSameOrigin(request: Request) {
   }
 }
 
+// Plans run up to 15,000 chars and approvals carry many decisions and challenge
+// rulings, so the cap is generous; schemas still bound every field.
+export const MAX_BODY_BYTES = 256 * 1024;
+
 export async function readJson<T>(
   request: Request,
   schema: z.ZodType<T>,
@@ -34,7 +38,7 @@ export async function readJson<T>(
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 16_384) {
+    if (size > MAX_BODY_BYTES) {
       await reader.cancel();
       throw new HttpError(413, "Request body is too large.");
     }

@@ -1,9 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { script } from "@/lib/install-script";
+import {
+  isCommandLineFetch,
+  notATerminalScript,
+  script,
+} from "@/lib/install-script";
 
 describe("/install script", () => {
   it("embeds the origin and fetches the kit installer from it", () => {
@@ -52,5 +62,93 @@ describe("personal installer (from /i/<code>)", () => {
   it("refuses anything that isn't a plain gb_ key", () => {
     expect(() => script("https://example.com", "gb_x'; rm -rf / #")).toThrow();
     expect(() => script("https://example.com", "sk_live_abc")).toThrow();
+  });
+});
+
+describe("/i/<code> redemption gate", () => {
+  it("only treats command-line fetchers as redeemers", () => {
+    for (const ua of ["curl/8.7.1", "Wget/1.21.4", "fetch/1.0"])
+      expect(isCommandLineFetch(ua)).toBe(true);
+    for (const ua of [
+      null,
+      "",
+      "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15",
+      "facebookexternalhit/1.1",
+      "Twitterbot/1.0",
+    ])
+      expect(isCommandLineFetch(ua)).toBe(false);
+  });
+
+  it("explains how to run it without consuming the code, as valid shell", () => {
+    const s = notATerminalScript("https://example.com/i/ABCD1234");
+    expect(s).toContain("curl -fsSL https://example.com/i/ABCD1234 | sh");
+    expect(() => execFileSync("sh", ["-n"], { input: s })).not.toThrow();
+  });
+});
+
+describe("agent kit reinstall", () => {
+  it("preserves custom hooks inside mixed entries and remains idempotent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gb-hooks-"));
+    const settingsPath = join(dir, ".claude/settings.local.json");
+    const custom = {
+      type: "command",
+      command: "node ./my-guard.mjs",
+      timeout: 7,
+    };
+    const settings = {
+      enabledMcpjsonServers: ["other-server"],
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: "Bash",
+            extra: "keep me",
+            hooks: [
+              custom,
+              {
+                type: "command",
+                command:
+                  'node "$CLAUDE_PROJECT_DIR/.claude/hooks/glassbox/glassbox-guard.mjs"',
+              },
+            ],
+          },
+          {
+            matcher: "Write",
+            hooks: [{ type: "command", command: "echo custom" }],
+          },
+        ],
+      },
+    };
+    try {
+      mkdirSync(join(dir, ".claude"));
+      writeFileSync(settingsPath, JSON.stringify(settings));
+      const run = () =>
+        execFileSync(
+          process.execPath,
+          [
+            resolve("agent-kit/install.mjs"),
+            dir,
+            "--key",
+            "gb_disposable_fixture",
+            "--url",
+            "https://example.com",
+          ],
+          { stdio: "pipe" },
+        );
+      run();
+      const first = JSON.parse(readFileSync(settingsPath, "utf8"));
+      expect(first.hooks.PreToolUse[0]).toEqual({
+        matcher: "Bash",
+        extra: "keep me",
+        hooks: [custom],
+      });
+      expect(first.hooks.PreToolUse[1]).toEqual(settings.hooks.PreToolUse[1]);
+      expect(first.hooks.PreToolUse).toHaveLength(3);
+      expect(first.enabledMcpjsonServers).toEqual(["other-server", "glassbox"]);
+      run();
+      expect(JSON.parse(readFileSync(settingsPath, "utf8"))).toEqual(first);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

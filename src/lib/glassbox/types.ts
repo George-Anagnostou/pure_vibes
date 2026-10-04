@@ -309,11 +309,14 @@ export const ChallengeAnswerSchema = z.object({
 });
 export type ChallengeAnswer = z.infer<typeof ChallengeAnswerSchema>;
 
-// The human's ruling on one challenge.
+// The human's ruling on one challenge. scenario/agent_response echo text Glass Box
+// and the agent wrote (see CHALLENGE_SCENARIO_MAX), so their limits must never be
+// tighter than what the pop-up can show, or the human cannot approve at all.
+export const CHALLENGE_SCENARIO_MAX = 2000;
 export const ChallengeRulingSchema = z.object({
   id: z.string().trim().min(1).max(10),
-  scenario: z.string().trim().max(600),
-  agent_response: z.string().trim().max(600),
+  scenario: z.string().trim().max(CHALLENGE_SCENARIO_MAX),
+  agent_response: z.string().trim().max(1000),
   approved: z.boolean(),
   instead: z.string().trim().max(600).optional(),
 });
@@ -391,12 +394,14 @@ export type Contract = {
 
 // ---- Approval payload (UI -> /api/reviews/[id]/approve) ----
 // Only the ranking is required; dials/hard lines/budget fall back to the profile, then defaults.
-// The human's final answer on one decision.
+// The human's final answer on one decision. topic/question/answer may come from a
+// Glass Box "add" suggestion (unbounded model output), so these limits are looser
+// than DecisionSchema's: the pop-up must be able to send back whatever it showed.
 export const DecisionAnswerSchema = z.object({
-  topic: z.string().trim().min(1).max(60),
-  question: z.string().trim().max(200),
-  answer: z.string().trim().min(1).max(300),
-  agent_choice: z.string().trim().max(200).optional(), // absent for decisions the agent never listed
+  topic: z.string().trim().min(1).max(200),
+  question: z.string().trim().max(600),
+  answer: z.string().trim().min(1).max(600),
+  agent_choice: z.string().trim().max(600).optional(), // absent for decisions the agent never listed
   changed: z.boolean(),
 });
 export type DecisionAnswer = z.infer<typeof DecisionAnswerSchema>;
